@@ -32,6 +32,11 @@ data class ChatUiState(
     val isSendingMedia: Boolean = false,
     /** True while the peer is composing — the header shows "typing…" instead of "Online". */
     val isPeerTyping: Boolean = false,
+    val stickerPacks: List<app.bungram.data.remote.StickerPackDto> = emptyList(),
+    /** A live ratchet session exists — the header shows a lock. */
+    val isEncrypted: Boolean = false,
+    /** Safety number for the verification sheet; null until the handshake completes. */
+    val safetyNumber: String? = null,
 )
 
 /** Composer idle window: after this long without a keystroke we tell the peer we stopped. */
@@ -50,13 +55,19 @@ class ChatViewModel(
     private val replyTo = MutableStateFlow<Message?>(null)
     private val error = MutableStateFlow<String?>(null)
     private val sendingMedia = MutableStateFlow(false)
+    private val stickers = MutableStateFlow<List<app.bungram.data.remote.StickerPackDto>>(emptyList())
 
     private var ticker: Job? = null
     private var typingJob: Job? = null
     private var typingAnnounced = false
 
     private data class RecState(val active: Boolean, val ms: Long, val peerTyping: Boolean)
-    private data class AuxState(val reply: Message?, val error: String?, val sending: Boolean)
+    private data class AuxState(
+        val reply: Message?,
+        val error: String?,
+        val sending: Boolean,
+        val packs: List<app.bungram.data.remote.StickerPackDto>,
+    )
 
     val state: StateFlow<ChatUiState> = combine(
         repository.messages(chatId),
@@ -65,7 +76,9 @@ class ChatViewModel(
         combine(recording, recordingMs, repository.typing(chatId)) { active, ms, typing ->
             RecState(active, ms, typing)
         },
-        combine(replyTo, error, sendingMedia) { reply, err, sending -> AuxState(reply, err, sending) },
+        combine(replyTo, error, sendingMedia, stickers) { reply, err, sending, packs ->
+            AuxState(reply, err, sending, packs)
+        },
     ) { messages, text, menu, rec, aux ->
         val chat = repository.chat(chatId)
         ChatUiState(
@@ -80,8 +93,22 @@ class ChatViewModel(
             error = aux.error,
             isSendingMedia = aux.sending,
             isPeerTyping = rec.peerTyping,
+            stickerPacks = aux.packs,
+            isEncrypted = repository.isEncrypted(chatId),
+            safetyNumber = repository.safetyNumber(chatId),
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatUiState())
+
+    init {
+        viewModelScope.launch {
+            runCatching { repository.stickers() }.getOrNull()?.let { stickers.value = it }
+        }
+    }
+
+    fun sendSticker(emoji: String) {
+        app.bungram.core.Sounds.send()
+        viewModelScope.launch { repository.send(chatId, emoji, MessageKind.STICKER) }
+    }
 
     fun onDraftChange(value: String) {
         draft.value = value
@@ -124,6 +151,7 @@ class ChatViewModel(
         draft.value = ""
         menuOpen.value = false
         stopTyping()
+        app.bungram.core.Sounds.send()
         viewModelScope.launch { repository.send(chatId, text) }
     }
 

@@ -59,6 +59,8 @@ data class SendMessageRequest(
     val attachmentId: String? = null,
     val replyToId: String? = null,
     val sentAtMs: Long,
+    val encrypted: Boolean = false,
+    val senderDeviceId: String? = null,
 )
 
 @Serializable
@@ -75,6 +77,127 @@ data class SyncResponse(
 
 @Serializable
 data class CreateChatRequest(val peerId: String)
+
+@Serializable
+data class CreateGroupRequest(
+    val title: String,
+    val description: String = "",
+    val memberIds: List<String> = emptyList(),
+    val kind: String = "GROUP",
+    val isPublic: Boolean = false,
+)
+
+@Serializable
+data class UpdateChatRequest(val title: String? = null, val description: String? = null)
+
+@Serializable
+data class MembersRequest(val userIds: List<String>)
+
+@Serializable
+data class MemberDto(val user: User, val role: String = "MEMBER", val joinedAtEpochMs: Long = 0)
+
+@Serializable
+data class ChatDetailDto(
+    val chat: Chat,
+    val members: List<MemberDto> = emptyList(),
+    val canManage: Boolean = false,
+)
+
+@Serializable
+data class InviteDto(
+    val slug: String,
+    val url: String,
+    val chatId: String,
+    val expiresAtEpochMs: Long = 0,
+    val uses: Int = 0,
+)
+
+@Serializable
+data class InvitePreviewDto(
+    val slug: String,
+    val chatId: String,
+    val kind: String,
+    val title: String,
+    val description: String = "",
+    val membersCount: Int = 0,
+    val isPublic: Boolean = false,
+    val alreadyMember: Boolean = false,
+)
+
+@Serializable
+data class StickerDto(val id: String, val emoji: String, val packId: String)
+
+@Serializable
+data class StickerPackDto(
+    val id: String,
+    val title: String,
+    val cover: String,
+    val stickers: List<StickerDto> = emptyList(),
+)
+
+@Serializable
+data class StickerCatalogDto(val packs: List<StickerPackDto> = emptyList())
+
+@Serializable
+data class DeviceRegistration(
+    val deviceId: String,
+    val provider: String = "none",
+    val pushToken: String = "",
+    val deviceName: String = "android",
+    val appVersion: String = "",
+)
+
+@Serializable
+data class DeviceDto(
+    val id: String,
+    val provider: String,
+    val deviceName: String,
+    val lastSeenEpochMs: Long,
+    val current: Boolean = false,
+)
+
+@Serializable
+data class PreKeyBundleDto(
+    val userId: String,
+    val deviceId: String,
+    val registrationId: Int = 0,
+    val identityKey: String,
+    val identitySignKey: String = "",
+    val signedPreKeyId: Int = 1,
+    val signedPreKey: String,
+    val signedPreKeySignature: String,
+    val oneTimePreKeyId: Int? = null,
+    val oneTimePreKey: String? = null,
+)
+
+@Serializable
+data class OneTimePreKeyDto(val id: Int, val key: String)
+
+@Serializable
+data class PublishKeysRequest(
+    val bundle: PreKeyBundleDto,
+    val oneTimePreKeys: List<OneTimePreKeyDto> = emptyList(),
+)
+
+@Serializable
+data class AckDto(
+    val chatId: String? = null,
+    val unread: Int? = null,
+    val typing: Boolean? = null,
+    val storyId: String? = null,
+    val viewed: Boolean? = null,
+    val delivered: Int? = null,
+    val callId: String? = null,
+    val count: Int? = null,
+)
+
+@Serializable
+data class UpdateProfileRequest(
+    val displayName: String? = null,
+    val username: String? = null,
+    val about: String? = null,
+    val avatarUrl: String? = null,
+)
 
 /** Reply of `POST /v1/media`. */
 @Serializable

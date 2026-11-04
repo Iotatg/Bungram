@@ -1,5 +1,12 @@
 package app.bungram.feature.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -70,6 +77,8 @@ fun HomeScreen(
     onOpenCall: (String) -> Unit,
     onNewChat: () -> Unit = {},
     onLogout: () -> Unit = {},
+    onCreateGroup: () -> Unit = {},
+    onCreateChannel: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(BungramTab.MESSAGE) }
     var showComposeSheet by rememberSaveable { mutableStateOf(false) }
@@ -89,7 +98,21 @@ fun HomeScreen(
     val contentBottom = 86.dp + navBottom
 
     Box(Modifier.fillMaxSize().background(Canvas)) {
-        when (tab) {
+        // Tabs slide in the direction of travel: moving right in the bar moves the content left.
+        // A plain cross-fade would lose the sense of position that a four-tab bar implies.
+        AnimatedContent(
+            targetState = tab,
+            transitionSpec = {
+                val forward = targetState.ordinal > initialState.ordinal
+                val distance = { full: Int -> if (forward) full / 12 else -full / 12 }
+                (slideInHorizontally(animationSpec = tween(220)) { distance(it) } + fadeIn(tween(180)))
+                    .togetherWith(
+                        slideOutHorizontally(animationSpec = tween(220)) { -distance(it) } + fadeOut(tween(140))
+                    )
+            },
+            label = "tab",
+        ) { current ->
+        when (current) {
             BungramTab.MESSAGE -> MessagesScreen(
                 state = messagesState,
                 onQueryChange = messagesVm::onQueryChange,
@@ -113,18 +136,11 @@ fun HomeScreen(
                 bottomPadding = contentBottom,
             )
 
-            BungramTab.PROFILE -> {
-                val me = AppGraph.me()
-                ProfileScreen(
-                    name = me?.displayName ?: "Your profile",
-                    phone = me?.phone.orEmpty(),
-                    username = me?.username.orEmpty(),
-                    about = me?.about.orEmpty(),
-                    avatarUrl = me?.avatarUrl,
-                    bottomPadding = contentBottom,
-                    onLogout = onLogout,
-                )
-            }
+            BungramTab.PROFILE -> ProfileScreen(
+                bottomPadding = contentBottom,
+                onLogout = onLogout,
+            )
+        }
         }
 
         BungramBottomBar(
@@ -160,8 +176,14 @@ fun HomeScreen(
                     showComposeSheet = false
                     onNewChat()
                 }
-                ComposeAction(Icons.Rounded.Group, "New group", "Up to 1,024 members, E2EE") {}
-                ComposeAction(Icons.Rounded.Campaign, "New channel", "Broadcast to unlimited followers") {}
+                ComposeAction(Icons.Rounded.Group, "New group", "Up to 200 members, admin rights") {
+                    showComposeSheet = false
+                    onCreateGroup()
+                }
+                ComposeAction(Icons.Rounded.Campaign, "New channel", "Broadcast to unlimited subscribers") {
+                    showComposeSheet = false
+                    onCreateChannel()
+                }
                 Spacer(Modifier.height(20.dp))
             }
         }

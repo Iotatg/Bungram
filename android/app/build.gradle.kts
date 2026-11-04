@@ -13,8 +13,8 @@ android {
         applicationId = "app.bungram"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
         vectorDrawables.useSupportLibrary = true
     }
 
@@ -74,6 +74,12 @@ dependencies {
     // Persistence — hand-written SQLite (BungramDb), no ORM and no annotation processor
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // E2EE primitives: X25519 key agreement + Ed25519 signatures, from Bouncy Castle's
+    // lightweight API (no JCE provider registration needed on Android, and it works back to API 21).
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+
+    testImplementation("junit:junit:4.13.2")
 
     // Networking
     implementation("io.ktor:ktor-client-core:3.0.1")

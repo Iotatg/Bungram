@@ -24,16 +24,16 @@ Bungram/
 │       ├── feature/         messages · chat · status · calls · profile · home
 │       ├── data/            models · SQLite cache · outbox · REST client · secure token store
 │       ├── data/media/      uploader · voice recorder · audio player · URL resolver
-│       ├── crypto/          X25519 · X3DH · Double Ratchet · Sender Keys · AES-GCM
+│       ├── crypto/          X25519 · X3DH · Double Ratchet · Sender Keys · AES-GCM · E2ee engine
 │       ├── sync/            WebSocket + cursor sync + backoff
-│       └── service/         SyncService (foreground) · CallService · BootReceiver
+│       └── service/         SyncService (foreground) · MessageNotifications (reply/read) · CallService
 ├── server/                  Ktor 3 backend (auth, chats, messages, sync, media, WS)
 │   └── src/main/kotlin/app/bungram/server/
 │       ├── media/           content-addressed blob store · image tools · URL signer
 │       ├── routes/          REST + WebSocket + media routes
 │       └── store/           in-memory store (Postgres in phase 8)
-├── artifacts/               bungram-0.3.0-debug.apk (built here)
-├── tools/                   e2e_two_devices.py (7 checks) · e2e_media.py (25 checks)
+├── artifacts/               bungram-0.4.0-debug.apk (built here)
+├── tools/                   e2e_two_devices.py (7) · e2e_media.py (25) · e2e_groups.py (21)
 ├── preview/index.html       1:1 interactive UI reference (open in a browser)
 └── docs/                    feature map · 36 Q&A · architecture · REA workflow · deep dive
                              · 10-phase roadmap · per-phase build reports (Hindi)
@@ -43,14 +43,19 @@ Bungram/
 
 | Check | Result |
 |---|---|
-| `android: gradle :app:assembleDebug` | ✅ BUILD SUCCESSFUL — `artifacts/bungram-0.3.0-debug.apk` (28 MB, `app.bungram.debug` 0.3.0, minSdk 26, targetSdk 35) |
+| `android: gradle :app:assembleDebug` | ✅ BUILD SUCCESSFUL — `artifacts/bungram-0.4.0-debug.apk` (28.8 MB, `app.bungram.debug` 0.4.0, minSdk 26, targetSdk 35) |
+| `android: gradle :app:testDebugUnitTest` | ✅ **18/18** — X3DH, ratchet, out-of-order, replay, tamper, storage reload, safety numbers |
 | `server: gradle build` | ✅ BUILD SUCCESSFUL (Kotlin 2.0.21 / Ktor 3.0.1 / JDK 17 target) |
 | Server boots on :8080 | ✅ `{"ok":true,"data":{"status":"ok",...}}` |
 | OTP → JWT login | ✅ token issued, profile synced |
 | `tools/e2e_two_devices.py` | ✅ **7/7 checks** — login, lookup, chat, WS delivery, receipt, typing, idempotent retry, cursor |
 | `tools/e2e_media.py` | ✅ **25/25 checks** — upload, sniff, thumbnail, dedupe, quota, range, ETag, ACL, share link, delete |
+| `tools/e2e_groups.py` | ✅ **21/21 checks** — groups, channels, roles, invites, stickers, devices, one-time pre-key pool |
 | App ↔ server wiring (P1) | ✅ login gate, local SQLite cache, durable outbox, delta sync, read receipts |
 | Media pipeline (P2) | ✅ pick → upload → message, image/video/file/voice bubbles, fullscreen viewer |
+| Groups & channels (P3) | ✅ create, roles, add/remove, invites, system messages, 180 stickers + emoji panel |
+| E2EE (P4) | ✅ X3DH + Double Ratchet, encrypted prefs, safety number, lock badge, "not available" placeholder |
+| Push (P5) | ✅ device registry, FCM/ntfy dispatcher, MessagingStyle + inline reply + mark-as-read |
 | REA analysis of the 3 reference APKs | ✅ Telegram 13.1.1 · Signal 8.33.2 · Element X 26.10.1 |
 
 ## Run the backend
@@ -104,7 +109,12 @@ against the original screenshots.
   live "typing…" in the header.
 - **Status** — grid header, search, "My status" with add badge, people rail with story rings,
   staggered 2-column story grid with play affordance, full-screen viewer.
-- **Call / Profile** — recent calls with direction icons, profile with settings rows.
+- **Call / Profile** — recent calls with direction icons; profile with editable name / username /
+  about, linked devices, sound toggle and encryption footer.
+- **Groups & channels** — create screen with member chips, group info with roles and invite links,
+  system messages, sender names in bubbles.
+- **Encryption** — lock in the chat header, 60-digit safety number sheet, honest placeholder when a
+  payload cannot be opened on this device.
 
 ## Docs
 
@@ -122,6 +132,7 @@ against the original screenshots.
 | `docs/09-HINDI-P1-BUILD.md` | **P1 in Hindi** — kya banaya, message ka poora safar, 4 bug fixes, 6/6 test, kaise chalayein, kya baaki hai |
 | `docs/10-ROADMAP-10-PHASES.md` | **10-phase plan to Telegram scale** — scope, deliverables, verification and risks per phase |
 | `docs/11-HINDI-P2-BUILD.md` | **P2 in Hindi** — media pipeline (upload → blob → thumb → signed URL), 8 bug fixes, 25/25 + 7/7 tests |
+| `docs/12-HINDI-P3-P5-BUILD.md` | **P3+P4+P5 in Hindi** — groups/channels, E2EE (X3DH + ratchet + tests), push, login rewrite, profile, assets, 12 bug fixes |
 
 ## Research setup (reproducible)
 

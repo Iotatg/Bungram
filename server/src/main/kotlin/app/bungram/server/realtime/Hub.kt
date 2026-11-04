@@ -31,6 +31,8 @@ class Hub {
 
     fun onlineUserIds(): Set<String> = connections.values.map { it.userId }.toSet()
 
+    fun isOnline(userId: String): Boolean = connections.values.any { it.userId == userId }
+
     fun sendToUsers(userIds: Collection<String>, payload: String): Int {
         var delivered = 0
         connections.values.forEach { conn ->

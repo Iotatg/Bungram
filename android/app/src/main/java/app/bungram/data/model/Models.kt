@@ -42,12 +42,24 @@ data class Chat(
     val isVerified: Boolean = false,
     val lastMessageFromMe: Boolean = false,
     val lastMessageRead: Boolean = true,
+    val description: String = "",
+    val inviteSlug: String? = null,
+    val ownerId: String? = null,
+    val myRole: ChatRole = ChatRole.MEMBER,
+    val canPost: Boolean = true,
+    /** Sealed with the Double Ratchet; the server only ever holds ciphertext. */
+    val isSecret: Boolean = false,
 ) {
     val isGroup: Boolean get() = kind == ChatKind.GROUP || kind == ChatKind.CHANNEL
+    val isChannel: Boolean get() = kind == ChatKind.CHANNEL
+    val isAdmin: Boolean get() = myRole == ChatRole.OWNER || myRole == ChatRole.ADMIN
 }
 
 @Serializable
-enum class MessageKind { TEXT, IMAGE, VIDEO, FILE, VOICE, LOCATION, CONTACT, POLL, SYSTEM }
+enum class ChatRole { OWNER, ADMIN, MEMBER }
+
+@Serializable
+enum class MessageKind { TEXT, IMAGE, VIDEO, FILE, VOICE, STICKER, LOCATION, CONTACT, POLL, SYSTEM }
 
 @Serializable
 enum class DeliveryState { QUEUED, SENT, DELIVERED, READ, FAILED }
@@ -98,6 +110,9 @@ data class Message(
     val reactions: List<Reaction> = emptyList(),
     val isEphemeral: Boolean = false,
     val expiresAtEpochMs: Long? = null,
+    /** Ciphertext from the server that could not be opened yet (no session / wrong device). */
+    val isEncrypted: Boolean = false,
+    val decryptFailed: Boolean = false,
 )
 
 @Serializable

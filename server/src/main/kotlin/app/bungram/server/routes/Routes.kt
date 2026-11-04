@@ -37,7 +37,9 @@ import io.ktor.server.auth.jwt.JWTPrincipal
 import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
+import io.ktor.server.routing.patch
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
@@ -62,6 +64,7 @@ fun Application.configureRoutes(
     sendLimiter: RateLimiter,
     media: app.bungram.server.media.MediaStore,
     signer: app.bungram.server.media.MediaSigner,
+    push: app.bungram.server.push.PushSender,
 ) {
     routing {
 
@@ -195,11 +198,48 @@ fun Application.configureRoutes(
 
         authenticate("auth-jwt") {
 
+            chatRoutes(store, hub)
+
             get("/v1/me") {
                 val uid = call.userId()
                 val user = store.userOrNull(uid)
                     ?: return@get call.respond(HttpStatusCode.NotFound, ErrorBody(error = "unknown user"))
                 call.respond(Envelope(data = user))
+            }
+
+            patch("/v1/me") {
+                val uid = call.userId()
+                val body = call.receive<app.bungram.server.model.UpdateProfileRequest>()
+                val user = store.userOrNull(uid)
+                    ?: return@patch call.respond(HttpStatusCode.NotFound, ErrorBody(error = "unknown user"))
+                val name = body.displayName?.trim()?.takeIf { it.isNotEmpty() } ?: user.displayName
+                val username = body.username?.trim()?.removePrefix("@")?.takeIf { it.isNotEmpty() }
+                if (username != null && username.length < 3) {
+                    return@patch call.respond(HttpStatusCode.BadRequest, ErrorBody(error = "username is at least 3 characters"))
+                }
+                if (username != null && store.users.values.any { it.id != uid && it.username == username }) {
+                    return@patch call.respond(HttpStatusCode.Conflict, ErrorBody(error = "that username is taken"))
+                }
+                val updated = user.copy(
+                    displayName = name.take(64),
+                    username = username ?: user.username,
+                    about = body.about?.trim()?.take(140) ?: user.about,
+                    avatarUrl = body.avatarUrl ?: user.avatarUrl,
+                )
+                store.users[uid] = updated
+                call.respond(Envelope(data = updated))
+            }
+
+            delete("/v1/messages/{chatId}/{messageId}") {
+                val uid = call.userId()
+                val chatId = call.parameters["chatId"].orEmpty()
+                val messageId = call.parameters["messageId"].orEmpty()
+                val ok = store.deleteMessage(chatId, messageId, uid)
+                if (!ok) return@delete call.respond(HttpStatusCode.Forbidden, ErrorBody(error = "cannot delete that message"))
+                store.members[chatId]?.forEach {
+                    hub.sendToUser(it, """{"type":"message_deleted","chatId":"$chatId","messageId":"$messageId"}""")
+                }
+                call.respond(Envelope(data = app.bungram.server.model.DeleteAckDto(deleted = true)))
             }
 
             /**
@@ -251,6 +291,10 @@ fun Application.configureRoutes(
                 if (store.members[req.chatId]?.contains(uid) != true) {
                     return@post call.respond(HttpStatusCode.Forbidden, ErrorBody(error = "not a member"))
                 }
+                val chat = store.chats[req.chatId]
+                if (chat != null && !store.canPost(chat, uid)) {
+                    return@post call.respond(HttpStatusCode.Forbidden, ErrorBody(error = "only admins can post in this channel"))
+                }
                 val sender = store.userOrNull(uid)
                     ?: return@post call.respond(HttpStatusCode.Unauthorized, ErrorBody(error = "unknown user"))
 
@@ -275,6 +319,8 @@ fun Application.configureRoutes(
                     isOutgoing = true,
                     replyToId = req.replyToId,
                     clientId = req.clientId.ifBlank { null },
+                    encrypted = req.encrypted,
+                    senderDeviceId = req.senderDeviceId,
                 )
                 val stored = store.appendMessage(message)
 
@@ -283,6 +329,8 @@ fun Application.configureRoutes(
                     peers,
                     """{"type":"message","chatId":"${req.chatId}","messageId":"${message.id}","clientId":"${req.clientId}"}""",
                 )
+                // Only members with no live socket get a push; an online client already has it.
+                peers.forEach { push.notify(it, req.chatId, sender.displayName, req.encrypted) }
                 call.respond(Envelope(data = stored))
             }
 

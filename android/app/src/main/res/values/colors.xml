@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Same blue as the in-app gradient, so the launcher and the splash agree. -->
+    <color name="ic_launcher_background">#2AABEE</color>
+</resources>

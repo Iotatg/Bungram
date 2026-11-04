@@ -74,6 +74,12 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
+      - name: Unit tests (crypto)
+        working-directory: android
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
       - name: Assemble debug
         working-directory: android
         run: |
@@ -87,6 +93,14 @@ jobs:
           "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/aapt2" dump badging "$APK" | head -3
           du -h "$APK"
 
+      - name: Test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crypto-test-report
+          path: android/app/build/reports/tests/testDebugUnitTest
+          retention-days: 7
+
       - uses: actions/upload-artifact@v4
         with:
           name: bungram-debug-apk
@@ -94,7 +108,7 @@ jobs:
           retention-days: 14
 
   protocol:
-    name: Protocol tests (two devices + media)
+    name: Protocol tests (messaging + media + groups)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,3 +146,6 @@ jobs:
 
       - name: Media pipeline
         run: python3 tools/e2e_media.py
+
+      - name: Groups, channels, invites, pre-keys
+        run: python3 tools/e2e_groups.py

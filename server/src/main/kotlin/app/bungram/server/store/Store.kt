@@ -25,6 +25,26 @@ class Store {
     val viewedStories = ConcurrentHashMap<String, MutableSet<String>>()
     val devices = ConcurrentHashMap<String, MutableSet<String>>()
 
+    /** chatId -> userId -> OWNER | ADMIN | MEMBER. Absent means MEMBER. */
+    val roles = ConcurrentHashMap<String, ConcurrentHashMap<String, String>>()
+
+    /** Invite slug -> record. Slugs are short, unguessable, and revocable. */
+    val invites = ConcurrentHashMap<String, InviteRecord>()
+
+    /** Published X3DH pre-key bundles: "userId:deviceId" -> bundle plus its one-time pool. */
+    val preKeys = ConcurrentHashMap<String, PreKeyRecord>()
+
+    /** "userId:deviceId" -> what the client told us about that device (provider, name, version). */
+    val deviceMeta = ConcurrentHashMap<String, app.bungram.server.model.DeviceRegistration>()
+
+    data class InviteRecord(
+        val slug: String,
+        val chatId: String,
+        val createdBy: String,
+        val expiresAtEpochMs: Long = 0,
+        @Volatile var uses: Int = 0,
+    )
+
     /**
      * Idempotency index: "senderId:clientId" -> messageId.
      * A retried send (flaky network, app killed mid-request) must never create a duplicate.
@@ -166,7 +186,36 @@ class Store {
 
     fun chatsFor(userId: String): List<ChatDto> = chats.values
         .filter { members[it.id]?.contains(userId) == true }
+        .map { project(it, userId) }
         .sortedByDescending { it.lastMessageAtEpochMs }
+
+    /**
+     * A chat row is stored once and shown to every member differently: the role and the
+     * "can I post here" flag depend on who is asking. Projecting at read time keeps the stored
+     * row free of per-viewer state.
+     */
+    fun project(chat: ChatDto, userId: String): ChatDto {
+        val role = roleOf(chat.id, userId)
+        return chat.copy(
+            myRole = role,
+            membersCount = members[chat.id]?.size ?: chat.membersCount,
+            canPost = canPost(chat, userId),
+        )
+    }
+
+    fun roleOf(chatId: String, userId: String): String = roles[chatId]?.get(userId) ?: "MEMBER"
+
+    fun canManage(chatId: String, userId: String): Boolean {
+        val role = roleOf(chatId, userId)
+        return role == "OWNER" || role == "ADMIN"
+    }
+
+    /** Channels are read-only for plain members; groups let everyone post. */
+    fun canPost(chat: ChatDto, userId: String): Boolean = when (chat.kind) {
+        "CHANNEL" -> canManage(chat.id, userId)
+        else -> true
+    }
+
 
     fun messagesFor(chatId: String, beforeMs: Long? = null, limit: Int = 100): List<MessageDto> {
         val all = messages[chatId] ?: return emptyList()
@@ -189,7 +238,12 @@ class Store {
         stored.clientId?.let { if (it.isNotBlank()) clientIndex["${stored.senderId}:$it"] = stored.id }
         chats[stored.chatId]?.let { chat ->
             chats[chat.id] = chat.copy(
-                lastMessagePreview = stored.attachment?.fileName ?: stored.text,
+                // Never echo ciphertext into a preview: the server has no business rendering it,
+                // and a base64 blob in the chat list is noise, not information.
+                lastMessagePreview = when {
+                    stored.encrypted -> "Encrypted message"
+                    else -> stored.attachment?.fileName ?: stored.text
+                },
                 lastMessageAtEpochMs = stored.createdAtEpochMs,
                 lastMessageFromMe = stored.isOutgoing,
                 lastMessageRead = false,
@@ -316,4 +370,212 @@ class Store {
     }
 
     fun id(prefix: String): String = "${prefix}_${UUID.randomUUID().toString().take(8)}"
+
+    /* ======================================================================================
+     * Groups, channels, members, invites
+     * ====================================================================================== */
+
+    fun createGroup(
+        ownerId: String,
+        title: String,
+        description: String,
+        memberIds: List<String>,
+        kind: String,
+        isPublic: Boolean,
+    ): ChatDto {
+        val id = nextId(if (kind == "CHANNEL") "ch" else "g")
+        val now = System.currentTimeMillis()
+        val chat = ChatDto(
+            id = id,
+            kind = kind,
+            title = title.trim().ifBlank { "Untitled" },
+            description = description.trim(),
+            ownerId = ownerId,
+            membersCount = 1 + memberIds.size,
+            lastMessageAtEpochMs = now,
+            isPublic = isPublic,
+        )
+        chats[id] = chat
+        val set = mutableSetOf(ownerId)
+        // Only real accounts join; a typo in a member id must not create a ghost member.
+        memberIds.forEach { if (users.containsKey(it) && it != ownerId) set += it }
+        members[id] = set
+        messages[id] = mutableListOf()
+        roles[id] = ConcurrentHashMap(mapOf(ownerId to "OWNER"))
+        chats[id] = chat.copy(membersCount = set.size)
+        return chats[id]!!
+    }
+
+    fun updateChat(chatId: String, title: String?, description: String?): ChatDto? {
+        val chat = chats[chatId] ?: return null
+        val updated = chat.copy(
+            title = title?.trim()?.takeIf { it.isNotEmpty() } ?: chat.title,
+            description = description?.trim() ?: chat.description,
+        )
+        chats[chatId] = updated
+        return updated
+    }
+
+    /** Adds members, skipping ones already in. Returns the ones that actually joined. */
+    fun addMembers(chatId: String, userIds: List<String>): List<UserDto> {
+        val set = members.computeIfAbsent(chatId) { mutableSetOf() }
+        val added = mutableListOf<UserDto>()
+        userIds.forEach { uid ->
+            val user = users[uid] ?: return@forEach
+            if (set.add(uid)) added += user
+        }
+        chats[chatId]?.let { chats[chatId] = it.copy(membersCount = set.size) }
+        return added
+    }
+
+    fun removeMember(chatId: String, userId: String): Boolean {
+        val removed = members[chatId]?.remove(userId) ?: false
+        if (removed) {
+            roles[chatId]?.remove(userId)
+            chats[chatId]?.let { chats[chatId] = it.copy(membersCount = members[chatId]?.size ?: 0) }
+        }
+        return removed
+    }
+
+    fun setRole(chatId: String, userId: String, role: String) {
+        roles.computeIfAbsent(chatId) { ConcurrentHashMap() }[userId] = role
+    }
+
+    /** Hard delete: the chat, its messages, roles and invites all disappear. */
+    fun deleteChat(chatId: String): Boolean {
+        val existed = chats.remove(chatId) != null
+        if (!existed) return false
+        members.remove(chatId)
+        messages.remove(chatId)
+        roles.remove(chatId)
+        invites.entries.removeIf { it.value.chatId == chatId }
+        return true
+    }
+
+    fun memberList(chatId: String): List<app.bungram.server.model.MemberDto> {
+        val ids = members[chatId] ?: return emptyList()
+        val owner = chats[chatId]?.ownerId
+        return ids.mapNotNull { uid ->
+            users[uid]?.let {
+                app.bungram.server.model.MemberDto(
+                    user = it,
+                    role = roles[chatId]?.get(uid) ?: if (uid == owner) "OWNER" else "MEMBER",
+                )
+            }
+        }.sortedWith(compareByDescending<app.bungram.server.model.MemberDto> { it.role == "OWNER" }
+            .thenByDescending { it.role == "ADMIN" }
+            .thenBy { it.user.displayName.lowercase() })
+    }
+
+    fun mintInvite(chatId: String, userId: String, ttlHours: Long = 0): app.bungram.server.model.InviteDto {
+        val slug = randomSlug()
+        val expires = if (ttlHours > 0) System.currentTimeMillis() + ttlHours * 3_600_000 else 0
+        invites[slug] = InviteRecord(slug, chatId, userId, expires)
+        chats[chatId]?.let { chats[chatId] = it.copy(inviteSlug = slug) }
+        return app.bungram.server.model.InviteDto(
+            slug = slug,
+            url = "https://bungram.app/+$slug",
+            chatId = chatId,
+            expiresAtEpochMs = expires,
+        )
+    }
+
+    fun revokeInvite(slug: String): Boolean {
+        val rec = invites.remove(slug) ?: return false
+        chats[rec.chatId]?.let { chats[rec.chatId] = it.copy(inviteSlug = null) }
+        return true
+    }
+
+    fun inviteBySlug(slug: String): InviteRecord? {
+        val rec = invites[slug] ?: return null
+        if (rec.expiresAtEpochMs != 0L && rec.expiresAtEpochMs < System.currentTimeMillis()) {
+            invites.remove(slug)
+            return null
+        }
+        return rec
+    }
+
+    /** Joins via slug. Idempotent: an existing member gets the chat back, not an error. */
+    fun joinBySlug(slug: String, userId: String): ChatDto? {
+        val rec = inviteBySlug(slug) ?: return null
+        val chat = chats[rec.chatId] ?: return null
+        if (members[chat.id]?.contains(userId) != true) {
+            addMembers(chat.id, listOf(userId))
+            rec.uses += 1
+        }
+        return project(chats[chat.id] ?: chat, userId)
+    }
+
+    private fun randomSlug(): String {
+        val alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+        return (1..16).map { alphabet.random() }.joinToString("")
+    }
+
+    fun deleteMessage(chatId: String, messageId: String, userId: String): Boolean {
+        val list = messages[chatId] ?: return false
+        val idx = list.indexOfFirst { it.id == messageId }
+        if (idx < 0) return false
+        val msg = list[idx]
+        val chat = chats[chatId]
+        // Author can delete their own; admins can delete anything in their chat.
+        if (msg.senderId != userId && !canManage(chatId, userId)) return false
+        val updated = msg.copy(isDeleted = true, text = "", attachment = null, seq = msgSeq.incrementAndGet())
+        list[idx] = updated
+        byId[updated.id] = updated
+        chat?.let { chats[chatId] = it.copy(lastMessagePreview = "This message was deleted") }
+        return true
+    }
+
+    /* ------------------------------------------------------------------------- pre-keys */
+
+    /**
+     * Long-term bundle plus the unspent one-time pool for one device. Held together so a fetch
+     * can atomically pop a key — two simultaneous senders must never receive the same one.
+     */
+    class PreKeyRecord(
+        @Volatile var bundle: app.bungram.server.model.PreKeyBundleDto,
+        val oneTime: ArrayDeque<app.bungram.server.model.OneTimePreKeyDto> = ArrayDeque(),
+    )
+
+    fun publishPreKeys(
+        bundle: app.bungram.server.model.PreKeyBundleDto,
+        oneTime: List<app.bungram.server.model.OneTimePreKeyDto> = emptyList(),
+    ) {
+        val id = "${bundle.userId}:${bundle.deviceId}"
+        val record = preKeys[id]
+        if (record == null) {
+            preKeys[id] = PreKeyRecord(bundle, ArrayDeque(oneTime))
+        } else {
+            record.bundle = bundle
+            synchronized(record.oneTime) {
+                record.oneTime.addAll(oneTime)
+                // A client that keeps topping up must not grow the pool without bound.
+                while (record.oneTime.size > MAX_ONE_TIME_KEYS) record.oneTime.removeFirst()
+            }
+        }
+    }
+
+    fun oneTimeKeyCount(userId: String, deviceId: String): Int =
+        preKeys["$userId:$deviceId"]?.let { synchronized(it.oneTime) { it.oneTime.size } } ?: 0
+
+    /**
+     * Consumes one one-time pre-key if present, mirroring Signal's "last resort" behaviour: when
+     * the pool runs dry the bundle is still served, just without a one-time key, so a conversation
+     * never gets stuck waiting for the peer's client to wake up and refill.
+     */
+    fun takePreKeyBundle(userId: String, deviceId: String? = null): app.bungram.server.model.PreKeyBundleDto? {
+        val key = if (deviceId != null) "$userId:$deviceId"
+        else preKeys.keys.firstOrNull { it.startsWith("$userId:") }
+        val record = key?.let { preKeys[it] } ?: return null
+        val otk = synchronized(record.oneTime) { record.oneTime.removeFirstOrNull() }
+        return record.bundle.copy(
+            oneTimePreKeyId = otk?.id ?: record.bundle.oneTimePreKeyId,
+            oneTimePreKey = otk?.key ?: record.bundle.oneTimePreKey,
+        )
+    }
+
+    private companion object {
+        const val MAX_ONE_TIME_KEYS = 200
+    }
+
 }

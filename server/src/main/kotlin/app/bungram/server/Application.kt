@@ -6,6 +6,7 @@ import app.bungram.server.model.Envelope
 import app.bungram.server.model.ErrorBody
 import app.bungram.server.model.Wire
 import app.bungram.server.realtime.Hub
+import app.bungram.server.push.PushDispatcher
 import app.bungram.server.routes.configureRoutes
 import app.bungram.server.security.JwtService
 import app.bungram.server.security.OtpService
@@ -61,6 +62,8 @@ fun Application.module() {
     val mediaDir = System.getenv("BUNGRAM_MEDIA_DIR") ?: "data/media"
     val media = MediaStore(java.io.File(mediaDir))
     val signer = MediaSigner(System.getenv("BUNGRAM_JWT_SECRET") ?: "dev-secret-change-me")
+    // Push only fires for members with no live socket; the hub is the source of truth for that.
+    val push = PushDispatcher(store) { userId -> hub.isOnline(userId) }
 
     install(ContentNegotiation) { json(Wire.json) }
     install(DefaultHeaders)
@@ -112,7 +115,7 @@ fun Application.module() {
             }
         }
     }
-    configureRoutes(store, hub, jwt, otp, otpLimiter, sendLimiter, media, signer)
+    configureRoutes(store, hub, jwt, otp, otpLimiter, sendLimiter, media, signer, push)
 
     log.info("Bungram server ready — ${store.users.size} users, ${store.chats.size} chats, media=${media.stats()["blobs"]}")
 }

@@ -13,6 +13,7 @@ import androidx.core.view.WindowCompat
 import app.bungram.core.design.BungramTheme
 import app.bungram.core.design.Canvas
 import app.bungram.core.nav.BungramNavHost
+import app.bungram.service.MessageNotifications
 
 class MainActivity : ComponentActivity() {
 
@@ -34,5 +35,17 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AppGraph.onActivityStarted()
+        // Anything already on screen is read by definition — clear the badge on the way in.
+        AppGraph.repository.activeChat()?.let { MessageNotifications.clear(this, it) }
+    }
+
+    override fun onStop() {
+        AppGraph.onActivityStopped()
+        super.onStop()
     }
 }

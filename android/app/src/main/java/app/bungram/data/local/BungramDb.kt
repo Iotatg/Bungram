@@ -83,7 +83,13 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                 is_pinned INTEGER NOT NULL DEFAULT 0,
                 is_verified INTEGER NOT NULL DEFAULT 0,
                 from_me INTEGER NOT NULL DEFAULT 0,
-                is_read INTEGER NOT NULL DEFAULT 1
+                is_read INTEGER NOT NULL DEFAULT 1,
+                description TEXT NOT NULL DEFAULT '',
+                invite_slug TEXT,
+                owner_id TEXT,
+                my_role TEXT NOT NULL DEFAULT 'MEMBER',
+                can_post INTEGER NOT NULL DEFAULT 1,
+                is_secret INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
         )
@@ -101,7 +107,9 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                 delivery TEXT NOT NULL,
                 outgoing INTEGER NOT NULL DEFAULT 0,
                 client_id TEXT,
-                reply_to TEXT
+                reply_to TEXT,
+                encrypted INTEGER NOT NULL DEFAULT 0,
+                decrypt_failed INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
         )
@@ -325,6 +333,12 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
         put("is_verified", if (c.isVerified) 1 else 0)
         put("from_me", if (c.lastMessageFromMe) 1 else 0)
         put("is_read", if (c.lastMessageRead) 1 else 0)
+        put("description", c.description)
+        put("invite_slug", c.inviteSlug)
+        put("owner_id", c.ownerId)
+        put("my_role", c.myRole.name)
+        put("can_post", if (c.canPost) 1 else 0)
+        put("is_secret", if (c.isSecret) 1 else 0)
     }
 
     private fun messageValues(m: Message) = ContentValues().apply {
@@ -340,6 +354,8 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
         put("outgoing", if (m.isOutgoing) 1 else 0)
         put("client_id", if (m.id.startsWith(LOCAL_PREFIX)) m.id.removePrefix(LOCAL_PREFIX) else null)
         put("reply_to", m.replyToId)
+        put("encrypted", if (m.isEncrypted) 1 else 0)
+        put("decrypt_failed", if (m.decryptFailed) 1 else 0)
     }
 
     private fun Cursor.str(col: String): String = getString(getColumnIndexOrThrow(col)) ?: ""
@@ -383,6 +399,12 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
         isVerified = boolean("is_verified"),
         lastMessageFromMe = boolean("from_me"),
         lastMessageRead = boolean("is_read"),
+        description = str("description"),
+        inviteSlug = optStr("invite_slug"),
+        ownerId = optStr("owner_id"),
+        myRole = enumOf("my_role", app.bungram.data.model.ChatRole.MEMBER),
+        canPost = boolean("can_post"),
+        isSecret = boolean("is_secret"),
     )
 
     private fun Cursor.toMessage(): Message {
@@ -399,12 +421,14 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
             delivery = enumOf("delivery", DeliveryState.SENT),
             isOutgoing = boolean("outgoing"),
             replyToId = optStr("reply_to"),
+            isEncrypted = boolean("encrypted"),
+            decryptFailed = boolean("decrypt_failed"),
         )
     }
 
     companion object {
         const val LOCAL_PREFIX = "l_"
         private const val NAME = "bungram.db"
-        private const val VERSION = 2
+        private const val VERSION = 4
     }
 }

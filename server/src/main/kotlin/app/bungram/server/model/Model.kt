@@ -26,6 +26,7 @@ data class UserDto(
 @Serializable
 data class ChatDto(
     val id: String,
+    /** DIRECT | GROUP | CHANNEL */
     val kind: String,
     val title: String,
     val avatarUrl: String? = null,
@@ -39,6 +40,145 @@ data class ChatDto(
     val isVerified: Boolean = false,
     val lastMessageFromMe: Boolean = false,
     val lastMessageRead: Boolean = true,
+    /** Public description shown under the title on the group / channel info screen. */
+    val description: String = "",
+    /** Invite slug (`bungram.app/+slug`). Null until an admin mints one. */
+    val inviteSlug: String? = null,
+    val ownerId: String? = null,
+    /** Caller's role in this chat: OWNER | ADMIN | MEMBER. Projected per request, never stored. */
+    val myRole: String = "MEMBER",
+    /** Channels only: true when the caller may post. Projected per request. */
+    val canPost: Boolean = true,
+    /** Channels: subscriber count is public even to non-members. */
+    val isPublic: Boolean = false,
+)
+
+@Serializable
+data class MemberDto(
+    val user: UserDto,
+    val role: String = "MEMBER",
+    val joinedAtEpochMs: Long = 0,
+)
+
+@Serializable
+data class ChatDetailDto(
+    val chat: ChatDto,
+    val members: List<MemberDto> = emptyList(),
+    /** True when the caller is allowed to add / remove members or edit the chat. */
+    val canManage: Boolean = false,
+)
+
+@Serializable
+data class CreateGroupRequest(
+    val title: String,
+    val description: String = "",
+    val memberIds: List<String> = emptyList(),
+    /** CHANNEL creates a broadcast channel instead of a group. */
+    val kind: String = "GROUP",
+    val isPublic: Boolean = false,
+)
+
+@Serializable
+data class UpdateChatRequest(
+    val title: String? = null,
+    val description: String? = null,
+)
+
+@Serializable
+data class MembersRequest(val userIds: List<String>)
+
+@Serializable
+data class InviteDto(
+    val slug: String,
+    val url: String,
+    val chatId: String,
+    val expiresAtEpochMs: Long = 0,
+    val uses: Int = 0,
+)
+
+@Serializable
+data class InvitePreviewDto(
+    val slug: String,
+    val chatId: String,
+    val kind: String,
+    val title: String,
+    val description: String = "",
+    val membersCount: Int = 0,
+    val isPublic: Boolean = false,
+    val alreadyMember: Boolean = false,
+)
+
+@Serializable
+data class StickerDto(
+    val id: String,
+    val emoji: String,
+    val packId: String,
+)
+
+@Serializable
+data class StickerPackDto(
+    val id: String,
+    val title: String,
+    val cover: String,
+    val stickers: List<StickerDto> = emptyList(),
+)
+
+@Serializable
+data class StickerCatalogDto(val packs: List<StickerPackDto> = emptyList())
+
+@Serializable
+data class DeviceRegistration(
+    val deviceId: String,
+    val provider: String = "none",
+    val pushToken: String = "",
+    val deviceName: String = "android",
+    val appVersion: String = "",
+)
+
+@Serializable
+data class DeviceDto(
+    val id: String,
+    val provider: String,
+    val deviceName: String,
+    val lastSeenEpochMs: Long,
+    val current: Boolean = false,
+)
+
+@Serializable
+data class PreKeyBundleDto(
+    val userId: String,
+    val deviceId: String,
+    val registrationId: Int = 0,
+    /** Long-term identity public key for Diffie-Hellman (X25519, base64). */
+    val identityKey: String,
+    /** Long-term identity public key for signatures (Ed25519, base64); verifies [signedPreKeySignature]. */
+    val identitySignKey: String = "",
+    val signedPreKeyId: Int = 1,
+    val signedPreKey: String,
+    val signedPreKeySignature: String,
+    val oneTimePreKeyId: Int? = null,
+    val oneTimePreKey: String? = null,
+)
+
+@Serializable
+data class OneTimePreKeyDto(val id: Int, val key: String)
+
+/**
+ * A device publishes its long-term bundle once and then tops up the one-time pool. The server
+ * hands out exactly one one-time key per fetch and never gives the same key twice — that is what
+ * makes the first X3DH message forward-secret even if the identity key later leaks.
+ */
+@Serializable
+data class PublishKeysRequest(
+    val bundle: PreKeyBundleDto,
+    val oneTimePreKeys: List<OneTimePreKeyDto> = emptyList(),
+)
+
+@Serializable
+data class SecretChatRequest(
+    val peerId: String,
+    /** Base64 of the X3DH initial message so the peer can derive the same root key. */
+    val initialMessage: String,
 )
 
 @Serializable
@@ -110,6 +250,10 @@ data class MessageDto(
     val seq: Long = 0,
     val editedAtEpochMs: Long? = null,
     val isDeleted: Boolean = false,
+    /** True when [text] is a sealed payload. The server stores it but cannot read it. */
+    val encrypted: Boolean = false,
+    /** Sender device that sealed the message — needed to pick the right ratchet session. */
+    val senderDeviceId: String? = null,
 )
 
 @Serializable
@@ -163,6 +307,9 @@ data class SendMessageRequest(
     val attachmentId: String? = null,
     val replyToId: String? = null,
     val sentAtMs: Long = System.currentTimeMillis(),
+    /** True when [ciphertext] is sealed — the server stores and forwards it verbatim. */
+    val encrypted: Boolean = false,
+    val senderDeviceId: String? = null,
 )
 
 @Serializable
@@ -208,6 +355,14 @@ data class CreateStatusRequest(
 data class CreateChatRequest(val peerId: String)
 
 @Serializable
+data class UpdateProfileRequest(
+    val displayName: String? = null,
+    val username: String? = null,
+    val about: String? = null,
+    val avatarUrl: String? = null,
+)
+
+@Serializable
 data class HealthDto(val status: String, val uptimeMs: Long, val connections: Int)
 
 @Serializable
@@ -222,6 +377,8 @@ data class AckDto(
     val viewed: Boolean? = null,
     val delivered: Int? = null,
     val callId: String? = null,
+    /** Remaining one-time pre-keys, so a client knows when to top up. */
+    val count: Int? = null,
 )
 
 @Serializable

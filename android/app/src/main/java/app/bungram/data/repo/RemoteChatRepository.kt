@@ -1,17 +1,26 @@
 package app.bungram.data.repo
 
+import app.bungram.crypto.E2ee
 import app.bungram.data.local.BungramDb
 import app.bungram.data.local.OutboxRow
 import app.bungram.data.model.Attachment
 import app.bungram.data.model.CallLog
 import app.bungram.data.model.Chat
+import app.bungram.data.model.ChatKind
 import app.bungram.data.model.DeliveryState
 import app.bungram.data.model.Message
 import app.bungram.data.model.MessageKind
 import app.bungram.data.model.StoryFeed
 import app.bungram.data.model.User
 import app.bungram.data.remote.BungramApi
+import app.bungram.data.remote.ChatDetailDto
+import app.bungram.data.remote.CreateGroupRequest
+import app.bungram.data.remote.InviteDto
+import app.bungram.data.remote.InvitePreviewDto
+import app.bungram.data.remote.MemberDto
 import app.bungram.data.remote.SendMessageRequest
+import app.bungram.data.remote.StickerPackDto
+import app.bungram.data.remote.UpdateProfileRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -45,6 +54,8 @@ class RemoteChatRepository(
     private val db: BungramDb,
     private val api: BungramApi,
     private val uploader: app.bungram.data.media.MediaUploader,
+    /** Null only in tests: without an engine every message is stored in the clear. */
+    private val e2ee: E2ee? = null,
 ) : ChatRepository {
 
     private val _chats = MutableStateFlow<List<Chat>>(emptyList())
@@ -60,6 +71,9 @@ class RemoteChatRepository(
     private val messageFlows = ConcurrentHashMap<String, MutableStateFlow<List<Message>>>()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile
+    private var stickerCache: List<StickerPackDto>? = null
 
     private val sendMutex = Mutex()
     private val syncMutex = Mutex()
@@ -134,12 +148,16 @@ class RemoteChatRepository(
         return syncNow()
     }
 
-    private fun applyDelta(incomingChats: List<Chat>, incomingUsers: List<User>, incomingMessages: List<Message>) {
+    private suspend fun applyDelta(
+        incomingChats: List<Chat>,
+        incomingUsers: List<User>,
+        incomingMessages: List<Message>,
+    ) {
         if (incomingUsers.isNotEmpty()) {
             incomingUsers.forEach { users[it.id] = it }
             db.upsertUsers(incomingUsers)
         }
-        val normalized = incomingMessages.map { it.copy(isOutgoing = it.senderId == meId) }
+        val normalized = incomingMessages.map { decryptIfNeeded(it.copy(isOutgoing = it.senderId == meId)) }
         db.upsertChats(incomingChats)
         db.upsertMessages(normalized)
 
@@ -215,17 +233,20 @@ class RemoteChatRepository(
             while (true) {
                 val pending = db.outbox().firstOrNull() ?: return@withLock
                 val localId = BungramDb.LOCAL_PREFIX + pending.clientId
+                val sealed = seal(pending.chatId, pending.kind, pending.text)
                 val sent = try {
                     api.sendMessage(
                         SendMessageRequest(
                             clientId = pending.clientId,
                             chatId = pending.chatId,
                             kind = pending.kind.name,
-                            ciphertext = pending.text,
+                            ciphertext = sealed.payload,
                             // Already uploaded before the row was queued, so a retry never
                             // re-sends megabytes over a flaky connection.
                             attachmentId = pending.attachmentId,
                             sentAtMs = pending.createdAtEpochMs,
+                            encrypted = sealed.encrypted,
+                            senderDeviceId = e2ee?.deviceId(),
                         )
                     )
                 } catch (t: Throwable) {
@@ -239,7 +260,13 @@ class RemoteChatRepository(
 
                 db.deleteMessage(localId)
                 db.removeOutbox(pending.clientId)
-                val stored = sent.copy(isOutgoing = true, delivery = DeliveryState.SENT)
+                // The server echoes ciphertext; the UI must keep showing what the user typed.
+                val stored = sent.copy(
+                    text = pending.text,
+                    isOutgoing = true,
+                    delivery = DeliveryState.SENT,
+                    isEncrypted = sealed.encrypted,
+                )
                 db.upsertMessages(listOf(stored))
                 replaceInFlow(pending.chatId, localId, stored)
                 touchChat(stored)
@@ -379,6 +406,166 @@ class RemoteChatRepository(
         else -> "application/octet-stream"
     }
 
+    /* --------------------------------------------------------------- groups & channels */
+
+    suspend fun createGroup(
+        title: String,
+        description: String,
+        memberIds: List<String>,
+        kind: String,
+        isPublic: Boolean,
+    ): Chat = withContext(Dispatchers.IO) {
+        val chat = api.createGroup(CreateGroupRequest(title, description, memberIds, kind, isPublic))
+        db.upsertChats(listOf(chat))
+        publishChats(_chats.value + chat)
+        chat
+    }
+
+    suspend fun chatDetail(chatId: String): ChatDetailDto = withContext(Dispatchers.IO) {
+        val detail = api.chatDetail(chatId)
+        // Members arrive with the detail payload; cache them so avatars and names resolve.
+        detail.members.map { it.user }.forEach { users[it.id] = it }
+        if (detail.members.isNotEmpty()) db.upsertUsers(detail.members.map { it.user })
+        detail
+    }
+
+    suspend fun updateChat(chatId: String, title: String?, description: String?): Chat =
+        withContext(Dispatchers.IO) {
+            val chat = api.updateChat(chatId, title, description)
+            publishChats(_chats.value.map { if (it.id == chatId) chat else it })
+            chat
+        }
+
+    suspend fun deleteChat(chatId: String) = withContext(Dispatchers.IO) {
+        runCatching { api.deleteChat(chatId) }
+        dropChatLocally(chatId)
+    }
+
+    suspend fun leaveChat(chatId: String) = withContext(Dispatchers.IO) {
+        val me = api.tokens.userId.orEmpty()
+        runCatching { api.removeMember(chatId, me) }
+        dropChatLocally(chatId)
+    }
+
+    fun dropChatLocally(chatId: String) {
+        messageFlows.remove(chatId)?.value = emptyList()
+        publishChats(_chats.value.filterNot { it.id == chatId })
+    }
+
+    suspend fun addMembers(chatId: String, ids: List<String>): List<MemberDto> =
+        withContext(Dispatchers.IO) { api.addMembers(chatId, ids) }
+
+    suspend fun removeMember(chatId: String, userId: String): List<MemberDto> =
+        withContext(Dispatchers.IO) { api.removeMember(chatId, userId) }
+
+    suspend fun setRole(chatId: String, userId: String, role: String): List<MemberDto> =
+        withContext(Dispatchers.IO) { api.setRole(chatId, userId, role) }
+
+    suspend fun mintInvite(chatId: String): InviteDto = withContext(Dispatchers.IO) {
+        api.mintInvite(chatId).also { inv ->
+            publishChats(_chats.value.map { if (it.id == chatId) it.copy(inviteSlug = inv.slug) else it })
+        }
+    }
+
+    suspend fun revokeInvite(chatId: String) = withContext(Dispatchers.IO) {
+        runCatching { api.revokeInvite(chatId) }
+        publishChats(_chats.value.map { if (it.id == chatId) it.copy(inviteSlug = null) else it })
+    }
+
+    suspend fun joinInvite(slug: String): Chat = withContext(Dispatchers.IO) {
+        val chat = api.joinInvite(slug)
+        db.upsertChats(listOf(chat))
+        publishChats(_chats.value.filterNot { it.id == chat.id } + chat)
+        syncNow()
+        chat
+    }
+
+    suspend fun previewInvite(slug: String): InvitePreviewDto = withContext(Dispatchers.IO) {
+        api.invitePreview(slug)
+    }
+
+    /** Sticker catalog is static per server build; cached for the process lifetime. */
+    override suspend fun stickers(): List<StickerPackDto> = withContext(Dispatchers.IO) {
+        stickerCache ?: api.stickers().also { stickerCache = it }
+    }
+
+    suspend fun refreshProfile(name: String?, username: String?, about: String?): User =
+        withContext(Dispatchers.IO) {
+            val user = api.updateProfile(UpdateProfileRequest(name, username, about, null))
+            users[user.id] = user
+            db.upsertUsers(listOf(user))
+            user
+        }
+
+    /* ---------------------------------------------------------------------------------- e2ee */
+
+    private data class Sealed(val payload: String, val encrypted: Boolean)
+
+    /**
+     * Encrypts one outgoing body, or passes it through untouched.
+     *
+     * Pass-through is deliberate, not a fallback bug: the peer may never have opened Bungram (no
+     * published pre-keys), or the chat may be a group, which still relies on server-side storage.
+     * The `encrypted` flag travels with the message, so the UI can show a lock only where the lock
+     * is real.
+     */
+    private suspend fun seal(chatId: String, kind: MessageKind, text: String): Sealed {
+        val engine = e2ee ?: return Sealed(text, false)
+        if (text.isEmpty()) return Sealed(text, false)
+        if (kind != MessageKind.TEXT && kind != MessageKind.STICKER) return Sealed(text, false)
+        val chat = chat(chatId) ?: return Sealed(text, false)
+        if (chat.kind != ChatKind.DIRECT) return Sealed(text, false)
+        val peerId = chat.peerId ?: return Sealed(text, false)
+        return try {
+            Sealed(engine.encrypt(peerId, text.toByteArray()), true)
+        } catch (e: E2ee.NoPreKeysException) {
+            Sealed(text, false)
+        } catch (t: Throwable) {
+            Sealed(text, false)
+        }
+    }
+
+    /**
+     * Decrypts an incoming row in place. A payload we cannot open stays in the database with an
+     * empty body and `decryptFailed = true` — the bubble then says "message not available" instead
+     * of vanishing or, worse, showing ciphertext.
+     */
+    private suspend fun decryptIfNeeded(message: Message): Message {
+        val engine = e2ee ?: return message
+        if (!message.isEncrypted || message.isOutgoing) return message
+        val plain = engine.decrypt(message.senderId, message.text)
+            ?: return message.copy(text = "", decryptFailed = true)
+        return message.copy(text = plain.toString(Charsets.UTF_8), decryptFailed = false)
+    }
+
+    /** True when this chat is sealed end to end (a 1:1 chat whose peer has published keys). */
+    override fun isEncrypted(chatId: String): Boolean {
+        val engine = e2ee ?: return false
+        val chat = chat(chatId) ?: return false
+        return chat.kind == ChatKind.DIRECT && chat.peerId?.let(engine::isEstablished) == true
+    }
+
+    override fun safetyNumber(chatId: String): String? {
+        val engine = e2ee ?: return null
+        val peerId = chat(chatId)?.peerId ?: return null
+        return engine.safetyNumber(peerId)
+    }
+
+    /**
+     * Publishes this device's bundle and tops up the one-time pool when the server runs low.
+     * Called on login and after every reconnect: an empty pool silently downgrades new sessions to
+     * "no forward secrecy for the first message", which is exactly what we do not want.
+     */
+    suspend fun publishPreKeys(force: Boolean = false) = withContext(Dispatchers.IO) {
+        val engine = e2ee ?: return@withContext
+        val me = meId
+        if (me.isEmpty()) return@withContext
+        val remaining = runCatching { api.keyStatus(engine.deviceId()) }.getOrDefault(0)
+        if (!force && remaining >= OTK_LOW_WATER) return@withContext
+        val fresh = engine.topUpOneTimePreKeys()
+        runCatching { api.publishKeys(KeyExchange.toDto(engine, me), KeyExchange.oneTimeKeys(fresh)) }
+    }
+
     /* ----------------------------------------------------------------------------- receipts */
 
     fun onReceipt(messageId: String, state: String) {
@@ -441,6 +628,9 @@ class RemoteChatRepository(
         activeChatId = null
     }
 
+    /** Chat currently on screen, or null. Used to suppress notifications for the open thread. */
+    fun activeChat(): String? = activeChatId
+
     override fun markStoryViewed(storyId: String) {
         _stories.value = _stories.value.map { feed ->
             feed.copy(stories = feed.stories.map { if (it.id == storyId) it.copy(viewed = true) else it })
@@ -484,6 +674,9 @@ class RemoteChatRepository(
 
         /** Slightly longer than the composer's idle window so the bubble does not flicker. */
         const val TYPING_TTL_MS = 5_000L
+
+        /** Below this many unspent one-time keys the client generates a fresh batch. */
+        const val OTK_LOW_WATER = 5
         val MESSAGE_ORDER: Comparator<Message> =
             compareBy<Message> { it.createdAtEpochMs }.thenBy { it.id }
     }

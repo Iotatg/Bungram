@@ -48,6 +48,8 @@ class SyncEngine(
     private val repository: RemoteChatRepository,
     private val api: BungramApi,
     private val settings: ServerSettings,
+    /** Called with the chat id whenever a message frame arrives; the app turns this into a push. */
+    private val onIncoming: (String) -> Unit = {},
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
@@ -117,8 +119,12 @@ class SyncEngine(
         val obj = runCatching { Wire.json.parseToJsonElement(raw) as JsonObject }.getOrNull() ?: return
         when (obj["type"]?.jsonPrimitive?.content) {
             "message" -> {
+                val chatId = obj["chatId"]?.jsonPrimitive?.content
                 repository.syncNow()
                 repository.flushOutbox()
+                // After the sync lands, the chat row already carries the new preview, so the
+                // notification can be built from local state instead of trusting the frame.
+                if (!chatId.isNullOrBlank()) onIncoming(chatId)
             }
             "receipt" -> {
                 val id = obj["messageId"]?.jsonPrimitive?.content ?: return
@@ -132,6 +138,9 @@ class SyncEngine(
                 )
                 repository.onTyping(signal.chatId, signal.userId, signal.typing)
                 _typing.tryEmit(signal)
+            }
+            "chat_deleted" -> {
+                obj["chatId"]?.jsonPrimitive?.content?.let { repository.dropChatLocally(it) }
             }
             "presence" -> repository.onPresence(
                 obj["userId"]?.jsonPrimitive?.content.orEmpty(),

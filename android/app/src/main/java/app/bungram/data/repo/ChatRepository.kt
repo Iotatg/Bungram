@@ -62,6 +62,15 @@ interface ChatRepository {
 
     /** Outbound typing signal. Fire-and-forget; a dropped frame is not an error. */
     suspend fun sendTyping(chatId: String, typing: Boolean)
+
+    /** Sticker packs for the composer. Empty when the backend does not serve them. */
+    suspend fun stickers(): List<app.bungram.data.remote.StickerPackDto> = emptyList()
+
+    /** True once a Double Ratchet session exists with this chat's peer. */
+    fun isEncrypted(chatId: String): Boolean = false
+
+    /** 60-digit fingerprint, identical on both devices, or null before the first handshake. */
+    fun safetyNumber(chatId: String): String? = null
 }
 
 class DemoChatRepository : ChatRepository {

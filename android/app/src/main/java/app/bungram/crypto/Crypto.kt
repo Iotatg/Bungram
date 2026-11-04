@@ -2,6 +2,8 @@ package app.bungram.crypto
 
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.crypto.generators.HKDFBytesGenerator
+import org.bouncycastle.crypto.macs.HMac
+import org.bouncycastle.crypto.params.KeyParameter
 import org.bouncycastle.crypto.generators.X25519KeyPairGenerator
 import org.bouncycastle.crypto.params.HKDFParameters
 import org.bouncycastle.crypto.params.X25519KeyGenerationParameters
@@ -49,6 +51,13 @@ object CryptoBox {
         return ByteArray(length).also { hkdf.generateBytes(it, 0, length) }
     }
 
+    fun hmac(key: ByteArray, data: ByteArray): ByteArray {
+        val mac = HMac(SHA256Digest())
+        mac.init(KeyParameter(key))
+        mac.update(data, 0, data.size)
+        return ByteArray(32).also { mac.doFinal(it, 0) }
+    }
+
     /** AES-256-GCM seal → nonce || ciphertext||tag */
     fun seal(key: ByteArray, plaintext: ByteArray, aad: ByteArray = ByteArray(0)): ByteArray {
         val nonce = randomBytes(NONCE_BYTES)
@@ -78,15 +87,32 @@ data class IdentityKeyPair(
     val signPrivate: ByteArray,
     val signPublic: ByteArray,
 ) {
-    /** 60-digit safety number equivalent: SHA-256 over both identity keys, rendered as digits. */
+    /**
+     * Safety number — the 60-digit fingerprint both sides can read out loud.
+     *
+     * The two public keys are sorted before hashing, so Alice and Bob compute the *same* number
+     * for each other. Without the sort the two sides would see different values and the whole
+     * comparison ritual would be useless.
+     */
     fun safetyNumber(peerSignPublic: ByteArray): String {
-        val digest = CryptoBox.sha256(signPublic, peerSignPublic)
+        val (a, b) = if (compare(signPublic, peerSignPublic) <= 0) signPublic to peerSignPublic
+        else peerSignPublic to signPublic
+        val digest = CryptoBox.sha256(a, b)
         return buildString {
             for (i in 0 until 12) {
                 val v = ((digest[i * 2].toInt() and 0xff) shl 8) or (digest[i * 2 + 1].toInt() and 0xff)
-                append("%05d".format(v % 100_000))
+                append(java.lang.String.format(java.util.Locale.ROOT, "%05d", v % 100_000))
             }
         }
+    }
+
+    private fun compare(a: ByteArray, b: ByteArray): Int {
+        val n = minOf(a.size, b.size)
+        for (i in 0 until n) {
+            val d = (a[i].toInt() and 0xff) - (b[i].toInt() and 0xff)
+            if (d != 0) return d
+        }
+        return a.size - b.size
     }
 }
 
@@ -111,6 +137,18 @@ object Keys {
             init(X25519KeyGenerationParameters(SecureRandom()))
         }
         return gen.generateKeyPair()
+    }
+
+    fun privateOf(pair: org.bouncycastle.crypto.AsymmetricCipherKeyPair): ByteArray =
+        (pair.private as X25519PrivateKeyParameters).encoded
+
+    fun publicOf(pair: org.bouncycastle.crypto.AsymmetricCipherKeyPair): ByteArray =
+        (pair.public as X25519PublicKeyParameters).encoded
+
+    /** Rebuilds a key pair from a stored private key — used when a session is restored from disk. */
+    fun pairOf(privateKey: ByteArray): org.bouncycastle.crypto.AsymmetricCipherKeyPair {
+        val priv = X25519PrivateKeyParameters(privateKey, 0)
+        return org.bouncycastle.crypto.AsymmetricCipherKeyPair(priv.generatePublicKey(), priv)
     }
 
     fun dh(privateKey: ByteArray, peerPublicKey: ByteArray): ByteArray {

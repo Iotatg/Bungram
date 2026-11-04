@@ -30,3 +30,6 @@ artifacts/*.zip
 # Scratch
 *.log
 tmp/
+
+# Runtime server data (media blobs, index)
+server/data/
