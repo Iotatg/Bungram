@@ -143,6 +143,10 @@ class ChatViewModel(
 
     fun setReply(message: Message?) { replyTo.value = message }
 
+    fun delete(message: Message) {
+        viewModelScope.launch { repository.deleteMessage(chatId, message.id) }
+    }
+
     fun dismissError() { error.value = null }
 
     fun send() {

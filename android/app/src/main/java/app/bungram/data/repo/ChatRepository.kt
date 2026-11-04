@@ -71,6 +71,9 @@ interface ChatRepository {
 
     /** 60-digit fingerprint, identical on both devices, or null before the first handshake. */
     fun safetyNumber(chatId: String): String? = null
+
+    /** Deletes for everyone (the server tombstones the row) and drops the local copy. */
+    suspend fun deleteMessage(chatId: String, messageId: String) {}
 }
 
 class DemoChatRepository : ChatRepository {

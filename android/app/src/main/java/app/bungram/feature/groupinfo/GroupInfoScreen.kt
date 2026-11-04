@@ -27,6 +27,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ExitToApp
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Tag
 import androidx.compose.material.icons.rounded.PersonRemove
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material3.AlertDialog
@@ -186,6 +187,17 @@ fun GroupInfoScreen(
                     )
                 }
             }
+
+            Hairline()
+            // Telegram hides the numeric id inside the info page too: it is what you paste into
+            // support tickets or a bot, and it is the only identifier that never changes when the
+            // title or the invite link does.
+            SectionRow(
+                icon = Icons.Rounded.Tag,
+                title = if (chat.isChannel) "Channel ID" else "Group ID",
+                subtitle = chat.id,
+                onClick = { onCopyLink(chat.id) },
+            )
 
             Hairline()
             Text(

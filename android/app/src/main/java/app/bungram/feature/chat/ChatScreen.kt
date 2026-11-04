@@ -24,7 +24,9 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,6 +56,9 @@ import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Reply
 import androidx.compose.material.icons.rounded.EmojiEmotions
 import androidx.compose.material.icons.rounded.ContactPage
 import androidx.compose.material.icons.rounded.InsertDriveFile
@@ -135,18 +140,41 @@ fun ChatScreen(
     onDismissError: () -> Unit,
     onOpenInfo: () -> Unit = {},
     onSendSticker: (String) -> Unit = {},
+    onReply: (Message) -> Unit = {},
+    onDelete: (Message) -> Unit = {},
     stickerPacks: List<app.bungram.data.remote.StickerPackDto> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     var showStickers by remember { mutableStateOf(false) }
     var showSafety by remember { mutableStateOf(false) }
+    var menuFor by remember { mutableStateOf<Message?>(null) }
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     var viewer by remember { mutableStateOf<Message?>(null) }
     var cameraTarget by remember { mutableStateOf<Uri?>(null) }
 
     val playingId by AppGraph.audio.playingId.collectAsStateWithLifecycle()
     val playbackProgress by AppGraph.audio.progress.collectAsStateWithLifecycle()
+
+    menuFor?.let { message ->
+        MessageMenu(
+            message = message,
+            onReply = {
+                menuFor = null
+                onReply(message)
+            },
+            onCopy = {
+                menuFor = null
+                clipboard.setText(androidx.compose.ui.text.AnnotatedString(message.text))
+            },
+            onDelete = {
+                menuFor = null
+                onDelete(message)
+            },
+            onDismiss = { menuFor = null },
+        )
+    }
 
     if (showSafety) {
         SafetyNumberSheet(
@@ -261,6 +289,7 @@ fun ChatScreen(
                         onOpenMedia = { viewer = message },
                         onToggleVoice = { AppGraph.audio.toggle(message.id, message.attachment!!, AppGraph.tokens.access) },
                         showSenderName = state.chat?.isGroup == true && !message.isOutgoing,
+                        onLongPress = { menuFor = message },
                     )
                 }
                 if (state.isPeerTyping) {
@@ -428,6 +457,7 @@ private fun ChatPattern(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun MessageBubble(
     message: Message,
@@ -436,6 +466,7 @@ private fun MessageBubble(
     onOpenMedia: () -> Unit,
     onToggleVoice: () -> Unit,
     showSenderName: Boolean = false,
+    onLongPress: () -> Unit = {},
 ) {
     if (message.kind == MessageKind.SYSTEM) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -459,7 +490,9 @@ private fun MessageBubble(
             Text(
                 message.text.ifBlank { "🙂" },
                 fontSize = 62.sp,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                modifier = Modifier
+                    .combinedClickable(onClick = {}, onLongClick = onLongPress)
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(TimeFormat.messageTime(message.createdAtEpochMs), fontSize = 8.5.sp, color = TextTertiary)
@@ -494,7 +527,9 @@ private fun MessageBubble(
             shape = shape,
             color = if (outgoing) BungramBlue else Color.White,
             shadowElevation = if (outgoing) 0.dp else 1.5.dp,
-            modifier = Modifier.widthIn(max = 300.dp),
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .combinedClickable(onClick = {}, onLongClick = onLongPress),
         ) {
             Column(Modifier.padding(horizontal = innerPadding, vertical = innerPadding)) {
                 if (showSenderName) {
@@ -894,4 +929,85 @@ private fun DecryptFailed() {
             fontWeight = FontWeight.Normal,
         )
     }
+}
+
+/**
+ * Long-press menu. Telegram's three actions, in the order people actually use them: reply, copy,
+ * delete. Delete only appears for your own messages — offering it on someone else's message and
+ * then failing server-side would be a lie.
+ */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MessageMenu(
+    message: Message,
+    onReply: () -> Unit,
+    onCopy: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = CanvasColor) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 18.dp),
+        ) {
+            Surface(shape = RoundedCornerShape(14.dp), color = Color.White, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    message.text.take(180).ifBlank { "Attachment" },
+                    modifier = Modifier.padding(14.dp),
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Surface(shape = RoundedCornerShape(16.dp), color = Color.White, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    MenuAction(Icons.Rounded.Reply, "Reply", BungramBlue, onReply)
+                    if (message.text.isNotBlank()) {
+                        MenuHairline()
+                        MenuAction(Icons.Rounded.ContentCopy, "Copy text", TextPrimary, onCopy)
+                    }
+                    if (message.isOutgoing) {
+                        MenuHairline()
+                        MenuAction(Icons.Rounded.Delete, "Delete for everyone", Danger, onDelete)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MenuAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(18.dp), tint = tint)
+        Spacer(Modifier.width(14.dp))
+        Text(label, fontSize = 13.5.sp, color = tint, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun MenuHairline() {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 48.dp)
+            .height(0.6.dp)
+            .background(app.bungram.core.design.Divider)
+    )
 }

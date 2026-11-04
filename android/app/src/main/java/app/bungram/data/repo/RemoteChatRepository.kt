@@ -566,6 +566,23 @@ class RemoteChatRepository(
         runCatching { api.publishKeys(KeyExchange.toDto(engine, me), KeyExchange.oneTimeKeys(fresh)) }
     }
 
+    /**
+     * Delete for everyone. The optimistic local row disappears first so the bubble is gone the
+     * instant the user taps; if the call fails the next sync brings the message back, which is
+     * the honest outcome — better than a bubble that says "deleted" while the server still has it.
+     */
+    override suspend fun deleteMessage(chatId: String, messageId: String) = withContext(Dispatchers.IO) {
+        val flow = flowFor(chatId)
+        val removed = flow.value.firstOrNull { it.id == messageId }
+        flow.value = flow.value.filterNot { it.id == messageId }
+        db.deleteMessage(messageId)
+        val ok = runCatching { api.deleteMessage(chatId, messageId) }.isSuccess
+        if (!ok && removed != null) {
+            flow.value = (flow.value + removed).sortedWith(MESSAGE_ORDER)
+            db.upsertMessages(listOf(removed))
+        }
+    }
+
     /* ----------------------------------------------------------------------------- receipts */
 
     fun onReceipt(messageId: String, state: String) {

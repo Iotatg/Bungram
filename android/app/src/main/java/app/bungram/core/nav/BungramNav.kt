@@ -203,6 +203,8 @@ private fun MainNavHost() {
                 onDismissError = vm::dismissError,
                 onOpenInfo = { nav.navigate(Routes.info(chatId)) },
                 onSendSticker = vm::sendSticker,
+                onReply = vm::setReply,
+                onDelete = vm::delete,
                 stickerPacks = state.stickerPacks,
             )
         }

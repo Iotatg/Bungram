@@ -36,6 +36,11 @@ Telegram ki tarah, chat ke beech me centered pill.
 - **Group info** — avatar, member list (Owner/Admin badges), invite row (`bungram.app/+slug`, tap = copy),
   add-by-phone, remove, promote/demote, rename, leave, delete. Delete/leave `AlertDialog` ke peeche.
 - **Stickers + emoji panel** — 180 stickers, 8-column emoji grid (~210 emoji), tab pills, slide-up animation.
+- **Message actions** — bubble par long-press → sheet: **Reply / Copy / Delete for everyone**.
+  Delete sirf apne message par dikhta hai. `setReply` pehle dead code tha (composer me reply chip
+  tha par usko trigger karne ka koi rasta nahi) — ab live hai.
+- **Group ID / Channel ID** — info page me `Tag` row, tap par copy. Ye wahi identifier hai jo title
+  ya invite link badalne par nahi badalta.
 - **Typing dots** — teen 6dp dots, `tween(420, delay = i*120)`, `RepeatMode.Reverse`. 2.5s idle par
   "typing…" khud band ho jata hai, kyunki "stopped typing" frame kabhi kho sakta hai.
 
