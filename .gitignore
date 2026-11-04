@@ -1,0 +1,32 @@
+# Build output
+build/
+*/build/
+.gradle/
+*/.gradle/
+.kotlin/
+*/.kotlin/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local config — never commit machine paths or secrets
+local.properties
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+
+# IDE
+.idea/
+*.iml
+*.hprof
+.DS_Store
+
+# Release binaries are attached to GitHub Releases, not committed
+artifacts/*.apk
+artifacts/*.aab
+artifacts/*.zip
+
+# Scratch
+*.log
+tmp/

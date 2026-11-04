@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug only. Any host is allowed over plain HTTP so the app can reach a server on a LAN IP
+  (192.168.x.x), an emulator loopback (10.0.2.2) or a laptop hotspot without a rebuild.
+  The release variant keeps the strict config in src/main/res/xml.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

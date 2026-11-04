@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bungram · REA 全量逆向看板</title>
+<style>
+  :root{
+    --bg:#0d0e12; --card:#15171e; --card2:#1b1e27; --line:#262a36;
+    --txt:#e7e9ef; --dim:#8b93a7; --dim2:#5f6779;
+    --blue:#4c8dff; --green:#35c46a; --amber:#e0a030; --red:#e5544b; --violet:#a06bff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased; line-height:1.55;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:56px 28px 90px}
+  .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim2);margin-bottom:14px}
+  h1{font-size:40px;line-height:1.15;letter-spacing:-.02em;font-weight:700}
+  h1 span{color:var(--blue)}
+  .sub{color:var(--dim);font-size:15px;margin-top:14px;max-width:760px}
+  .meta{display:flex;gap:22px;flex-wrap:wrap;margin-top:24px;font-size:12.5px;color:var(--dim2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .meta b{color:var(--dim);font-weight:500}
+
+  section{margin-top:56px}
+  h2{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim2);font-weight:600;margin-bottom:20px;display:flex;align-items:center;gap:12px}
+  h2::after{content:"";flex:1;height:1px;background:var(--line)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .kpi .n{font-size:30px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:12px;color:var(--dim2);margin-top:6px}
+  .kpi .d{font-size:11.5px;color:var(--dim);margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
+  .card h3{font-size:15px;font-weight:600;margin-bottom:4px}
+  .card .tag{font-size:11px;color:var(--dim2);font-family:ui-monospace,monospace}
+  .bars{margin-top:18px}
+  .bar{margin-bottom:13px}
+  .bar .row{display:flex;justify-content:space-between;font-size:12px;color:var(--dim);margin-bottom:6px}
+  .bar .row b{color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums}
+  .track{height:6px;background:#20232e;border-radius:4px;overflow:hidden}
+  .fill{height:100%;border-radius:4px}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:500;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim2);padding:10px 12px;border-bottom:1px solid var(--line)}
+  td{padding:11px 12px;border-bottom:1px solid #1d2029;color:var(--dim)}
+  td:first-child{color:var(--txt)}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:#181b23}
+  .num{font-variant-numeric:tabular-nums;text-align:right;color:var(--txt);white-space:nowrap}
+  table.compact th:nth-child(1){width:24%}
+  table.compact th:nth-child(2),
+  table.compact th:nth-child(3),
+  table.compact th:nth-child(4){width:17%}
+  table.compact td:last-child{color:var(--dim2);font-size:12px;line-height:1.5}
+  .win{color:var(--green);font-weight:600}
+  .bad{color:var(--red)}
+  .mid{color:var(--amber)}
+
+  .matrix{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .matrix .scroll{max-height:520px;overflow:auto}
+  .matrix table{font-size:12.5px}
+  .matrix th{position:sticky;top:0;background:#181b23;z-index:2}
+  .sym{font-family:ui-monospace,monospace;font-size:13px}
+
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:16px}
+  .chip{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px;padding:5px 9px;border-radius:6px;background:#1e222c;border:1px solid #2a2f3d;color:#b9c0d0}
+  .chip.m{color:#8fb8ff;border-color:#2b3d5e;background:#16202f}
+  .chip.f{color:#c9a6ff;border-color:#3a2b58;background:#1e1830}
+
+  .timeline{position:relative;padding-left:26px}
+  .timeline::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:1px;background:var(--line)}
+  .step{position:relative;padding:0 0 22px 0}
+  .step::before{content:"";position:absolute;left:-23px;top:5px;width:9px;height:9px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 3px rgba(76,141,255,.14)}
+  .step.done::before{background:var(--green);box-shadow:0 0 0 3px rgba(53,196,106,.14)}
+  .step .t{font-size:14px;font-weight:600}
+  .step .t em{font-style:normal;font-family:ui-monospace,monospace;font-size:11px;color:var(--dim2);margin-right:8px}
+  .step .d{font-size:12.5px;color:var(--dim);margin-top:3px}
+
+  .note{background:linear-gradient(180deg,#171a22,#14161d);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:10px;padding:16px 18px;font-size:13px;color:var(--dim)}
+  .note b{color:var(--txt)}
+  footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);font-size:11.5px;color:var(--dim2);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:1fr}h1{font-size:30px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Reverse-engineering dossier · round 2</div>
+  <h1>Bungram <span>/</span> 三个 App 被拆开之后</h1>
+  <p class="sub">
+    用 REA 把 Telegram、Signal、Element X 的 APK 全量拆解：类清单、组件面、权限面、类成员、方法体、引用图。
+    下面的每个数字都来自本机实际执行，附 evidence_id。
+  </p>
+  <div class="meta">
+    <span><b>rea</b> 6.7.0</span>
+    <span><b>engine</b> jadx-headless-mcp 0.7.1</span>
+    <span><b>apktool</b> 2.9.3</span>
+    <span><b>commits</b> 3de37c8 · 515db93 · 9aef471f</span>
+  </div>
+
+  <section>
+    <h2>总览</h2>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="n">54,871</div>
+        <div class="l">三个 APK 的类总数</div>
+        <div class="d">16,432 · 22,008 · 16,431</div>
+      </div>
+      <div class="kpi">
+        <div class="n">93</div>
+        <div class="l">三家权限去重并集</div>
+        <div class="d">合计申请 173 条 · 交集仅 18</div>
+      </div>
+      <div class="kpi">
+        <div class="n">33</div>
+        <div class="l">Element 斜杠命令</div>
+        <div class="d">Telegram / Signal 均为 0</div>
+      </div>
+      <div class="kpi">
+        <div class="n">197</div>
+        <div class="l">Signal 后台 Job</div>
+        <div class="d">离线可靠性的真正来源</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>三家画像</h2>
+    <div class="grid3">
+
+      <div class="card">
+        <h3>Telegram</h3>
+        <div class="tag">org.telegram.messenger.web · 13.1.1</div>
+        <div class="bars">
+          <div class="bar"><div class="row"><span>类</span><b>16,432</b></div><div class="track"><div class="fill" style="width:75%;background:var(--blue)"></div></div></div>
+          <div class="bar"><div class="row"><span>资源</span><b>7,531</b></div><div class="track"><div class="fill" style="width:100%;background:var(--blue)"></div></div></div>
+          <div class="bar"><div class="row"><span>权限</span><b>74</b></div><div class="track"><div class="fill" style="width:96%;background:var(--blue)"></div></div></div>
+          <div class="bar"><div class="row"><span>Service</span><b>32</b></div><div class="track"><div class="fill" style="width:100%;background:var(--blue)"></div></div></div>
+        </div>
+        <div style="margin-top:16px;font-size:12.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:14px">
+          服务端权威 · pts/seq 差分 · 32 个常驻服务<br>
+          <span style="color:var(--amber)">APK 已混淆，类级取证只能靠源码</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Signal</h3>
+        <div class="tag">org.thoughtcrime.securesms · 8.33.2</div>
+        <div class="bars">
+          <div class="bar"><div class="row"><span>类</span><b>22,008</b></div><div class="track"><div class="fill" style="width:100%;background:var(--green)"></div></div></div>
+          <div class="bar"><div class="row"><span>资源</span><b>4,140</b></div><div class="track"><div class="fill" style="width:55%;background:var(--green)"></div></div></div>
+          <div class="bar"><div class="row"><span>权限</span><b>77</b></div><div class="track"><div class="fill" style="width:100%;background:var(--green)"></div></div></div>
+          <div class="bar"><div class="row"><span>Job</span><b>197</b></div><div class="track"><div class="fill" style="width:100%;background:var(--green)"></div></div></div>
+        </div>
+        <div style="margin-top:16px;font-size:12.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:14px">
+          本机为真 · 全量 E2EE · 94 个 Activity<br>
+          <span style="color:var(--green)">最该抄的是 Job 化</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Element X</h3>
+        <div class="tag">io.element.android.x · 26.10.1</div>
+        <div class="bars">
+          <div class="bar"><div class="row"><span>类</span><b>16,431</b></div><div class="track"><div class="fill" style="width:75%;background:var(--violet)"></div></div></div>
+          <div class="bar"><div class="row"><span>资源</span><b>1,483</b></div><div class="track"><div class="fill" style="width:20%;background:var(--violet)"></div></div></div>
+          <div class="bar"><div class="row"><span>权限</span><b>22</b></div><div class="track"><div class="fill" style="width:29%;background:var(--violet)"></div></div></div>
+          <div class="bar"><div class="row"><span>Activity</span><b>5</b></div><div class="track"><div class="fill" style="width:6%;background:var(--violet)"></div></div></div>
+        </div>
+        <div style="margin-top:16px;font-size:12.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:14px">
+          房间 DAG · 46 feature 模块 · 单 Activity<br>
+          <span style="color:var(--green)">结构最值得抄</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>组件面 · 功能边界的硬指标</h2>
+    <div class="card" style="padding:8px 4px">
+      <table class="compact">
+        <thead>
+          <tr><th>组件</th><th class="num">Telegram</th><th class="num">Signal</th><th class="num">Element X</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Activity</td><td class="num">20 <span class="bad">/ 8 exported</span></td><td class="num win">94 <span style="color:var(--dim2)">/ 8</span></td><td class="num">5 <span style="color:var(--dim2)">/ 1</span></td><td>Signal 一屏一 Activity；Element 单 Activity + 导航图</td></tr>
+          <tr><td>Activity-Alias</td><td class="num">7</td><td class="num">12</td><td class="num">0</td><td>桌面图标别名，Telegram/Signal 用满</td></tr>
+          <tr><td>Service</td><td class="num win">32 <span style="color:var(--dim2)">/ 17</span></td><td class="num">26 <span style="color:var(--dim2)">/ 6</span></td><td class="num">9 <span style="color:var(--dim2)">/ 2</span></td><td>32 个常驻能力：通话/录制/位置/文件…</td></tr>
+          <tr><td>Receiver</td><td class="num">27</td><td class="num win">40</td><td class="num">11</td><td>推送、开机、网络变化、媒体键</td></tr>
+          <tr><td>Provider</td><td class="num">6</td><td class="num">6</td><td class="num">8</td><td>FileProvider、搜索、初始化</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>权限面 · 谁更克制</h2>
+    <div class="card" style="padding:8px 4px">
+      <table>
+        <thead><tr><th>类别</th><th class="num">Telegram</th><th class="num">Signal</th><th class="num">Element X</th></tr></thead>
+        <tbody>
+          <tr><td>通信 / 后台</td><td class="num">8</td><td class="num">12</td><td class="num">9</td></tr>
+          <tr><td>相机 / 麦克风</td><td class="num">3</td><td class="num">3</td><td class="num">3</td></tr>
+          <tr><td>位置</td><td class="num bad">4</td><td class="num">2</td><td class="num">2</td></tr>
+          <tr><td>通讯录 / 电话</td><td class="num bad">7</td><td class="num">5</td><td class="num win">0</td></tr>
+          <tr><td>存储 / 媒体</td><td class="num">5</td><td class="num">5</td><td class="num win">0</td></tr>
+          <tr><td>蓝牙 / 邻近</td><td class="num">2</td><td class="num">3</td><td class="num win">0</td></tr>
+          <tr><td>生物识别 / 锁屏</td><td class="num">3</td><td class="num">3</td><td class="num">2</td></tr>
+          <tr><td>短信</td><td class="num bad">1</td><td class="num">0</td><td class="num">0</td></tr>
+          <tr><td>系统 / 厂商</td><td class="num">4</td><td class="num">5</td><td class="num">1</td></tr>
+          <tr style="background:#181b23"><td><b>合计</b></td><td class="num"><b>74</b></td><td class="num"><b>77</b></td><td class="num win"><b>22</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:14px">
+      <b>Bungram 只需要 18 个</b>——三家都申请的那批：网络、相机、麦克风、通知、前台服务、唤醒锁、生物识别、震动、全屏 Intent、精/粗定位。
+      Telegram 的 <code>SEND_SMS</code> / <code>READ_CALL_LOG</code> / <code>SYSTEM_ALERT_WINDOW</code> 是 2013 年的包袱，一个都不要。
+    </div>
+  </section>
+
+  <section>
+    <h2>40 个子系统 · 谁实现了什么</h2>
+    <div class="matrix">
+      <div class="scroll">
+        <table>
+          <thead><tr><th>子系统</th><th>Telegram</th><th>Signal</th><th>Element X</th><th>Bungram</th></tr></thead>
+          <tbody class="sym">
+            <tr><td>注册 / 登录</td><td class="win">✓ 手机+码+二级密码</td><td class="win">✓ 手机+PIN+注册锁</td><td class="win">✓ OIDC/SSO</td><td class="win">✓ OTP→JWT 实测</td></tr>
+            <tr><td>多设备</td><td class="win">✓ 同账号</td><td class="mid">◐ 主设备+链接</td><td class="win">✓ 多设备+验证</td><td class="mid">◇ 表已建</td></tr>
+            <tr><td>增量同步</td><td class="win">✓ pts/qts/seq</td><td class="mid">◐ 队列消费</td><td class="win">✓ /sync since</td><td class="mid">◇ 有 cursor</td></tr>
+            <tr><td>本地存储</td><td class="win">✓ SQLite+FTS</td><td class="win">✓ 加密 SQLite</td><td class="win">✓ Rust 库</td><td class="bad">✕ 内存 demo</td></tr>
+            <tr><td>加密</td><td class="mid">◐ 云聊天服务端加密</td><td class="win">✓ Signal Protocol</td><td class="win">✓ Olm/Megolm</td><td class="bad">✕ 未接线</td></tr>
+            <tr><td>群组</td><td class="win">✓ 200k+权限位</td><td class="win">✓ v2+Sender Key</td><td class="win">✓ room+power</td><td class="bad">✕</td></tr>
+            <tr><td>媒体</td><td class="win">✓ 并行分片</td><td class="win">✓ 加密附件</td><td class="win">✓ upload</td><td class="bad">✕</td></tr>
+            <tr><td>语音 / 视频</td><td class="win">✓ VoIP</td><td class="win">✓ RingRTC</td><td class="win">✓ Element Call</td><td class="bad">✕</td></tr>
+            <tr><td>通话记录</td><td class="win">✓ CallLogActivity</td><td class="win">✓</td><td class="bad">✕ 无独立 UI</td><td class="mid">◇ demo</td></tr>
+            <tr><td>Stories</td><td class="win">✓ 49 文件</td><td class="win">✓</td><td class="bad">✕</td><td class="mid">◇ demo</td></tr>
+            <tr><td>在线状态</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="mid">◇ 枚举</td></tr>
+            <tr><td>已读回执</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="mid">◇ 字段</td></tr>
+            <tr><td>输入中</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>表情回应</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>回复 / 转发</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>编辑 / 删除</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>投票</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>贴纸 / GIF</td><td class="win">✓</td><td class="win">✓</td><td class="mid">◐ emoji</td><td class="bad">✕</td></tr>
+            <tr><td>位置</td><td class="win">✓ 实时</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>联系人</td><td class="win">✓ 通讯录同步</td><td class="win">✓</td><td class="bad">✕ 用户目录</td><td class="mid">◇ demo</td></tr>
+            <tr><td>搜索</td><td class="win">✓ 全局+FTS</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>通知</td><td class="win">✓ FCM+角标</td><td class="win">✓ 渠道</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>推送</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>离线队列</td><td class="win">✓</td><td class="win">✓ 197 Job</td><td class="win">✓ Rust</td><td class="bad">✕</td></tr>
+            <tr><td>代理</td><td class="win">✓ MTProxy</td><td class="win">✓</td><td class="bad">✕</td><td class="bad">✕</td></tr>
+            <tr><td>备份</td><td class="win">✓ 云备份</td><td class="win">✓ 本地+云</td><td class="win">✓ 密钥备份</td><td class="bad">✕</td></tr>
+            <tr><td>主题</td><td class="win">✓ 多主题</td><td class="win">✓</td><td class="win">✓ Compound</td><td class="mid">◇ 设计系统</td></tr>
+            <tr><td>国际化</td><td class="win">✓ 100+</td><td class="win">✓</td><td class="win">✓</td><td class="mid">◇ 仅英文</td></tr>
+            <tr><td>无障碍</td><td class="mid">◐</td><td class="win">✓</td><td class="win">✓</td><td class="mid">◐ 部分</td></tr>
+            <tr><td>应用锁 / 截屏保护</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>阅后即焚</td><td class="win">✓ TTL</td><td class="win">✓</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>举报 / 审核</td><td class="win">✓</td><td class="win">✓</td><td class="win">✓ 房间审核</td><td class="bad">✕</td></tr>
+            <tr><td>支付</td><td class="win">✓ Stars/TON</td><td class="mid">◐ billing</td><td class="bad">✕</td><td class="bad">✕</td></tr>
+            <tr><td>机器人</td><td class="win">✓ Bot API</td><td class="bad">✕</td><td class="bad">✕</td><td class="mid">◇ 服务号</td></tr>
+            <tr><td>频道</td><td class="win">✓</td><td class="bad">✕</td><td class="mid">◐ Space</td><td class="bad">✕</td></tr>
+            <tr><td>语音房</td><td class="win">✓ Voice Chats</td><td class="win">✓ 群通话</td><td class="win">✓</td><td class="bad">✕</td></tr>
+            <tr><td>会话文件夹</td><td class="win">✓</td><td class="bad">✕</td><td class="win">✓ viewfolder</td><td class="bad">✕</td></tr>
+            <tr><td>斜杠命令</td><td class="bad">✕</td><td class="bad">✕</td><td class="win">✓ 33 个</td><td class="bad">✕</td></tr>
+            <tr><td>深度链接</td><td class="win">✓ tg://</td><td class="win">✓ sgnl://</td><td class="win">✓ element://</td><td class="bad">✕</td></tr>
+            <tr><td>应用内更新</td><td class="win">✓</td><td class="win">✓ APK</td><td class="mid">◐ 商店</td><td class="bad">✕</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="note" style="margin-top:14px">
+      <b>40 项里：Bungram 4 项可用、9 项有骨架、27 项空白。</b>
+      空白不是失败，是排期——P1 到 P6 覆盖其中 6 项，剩下 21 项属于「一年后再看」。
+    </div>
+  </section>
+
+  <section>
+    <h2>命令清单 · 33 个斜杠命令（Element X）</h2>
+    <div class="card">
+      <div style="font-size:12.5px;color:var(--dim2);margin-bottom:4px">管理类</div>
+      <div class="chips">
+        <span class="chip m">/ban</span><span class="chip m">/unban</span><span class="chip m">/op</span><span class="chip m">/deop</span>
+        <span class="chip m">/remove</span><span class="chip m">/invite</span><span class="chip m">/join</span><span class="chip m">/leave</span>
+        <span class="chip m">/upgraderoom</span><span class="chip m">/whois</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--dim2);margin:18px 0 4px">身份 / 房间</div>
+      <div class="chips">
+        <span class="chip">/nick</span><span class="chip">/myroomnick</span><span class="chip">/roomname</span><span class="chip">/topic</span>
+        <span class="chip">/roomavatar</span><span class="chip">/myavatar</span><span class="chip">/myroomavatar</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--dim2);margin:18px 0 4px">格式 / 彩蛋</div>
+      <div class="chips">
+        <span class="chip f">/me</span><span class="chip f">/spoiler</span><span class="chip f">/plain</span><span class="chip f">/shrug</span>
+        <span class="chip f">/lenny</span><span class="chip f">/rainbow</span><span class="chip f">/rainbowme</span><span class="chip f">/confetti</span>
+        <span class="chip f">/snowfall</span><span class="chip f">/tableflip</span><span class="chip f">/unflip</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--dim2);margin:18px 0 4px">调试</div>
+      <div class="chips">
+        <span class="chip">/crash</span><span class="chip">/devtools</span><span class="chip">/discardsession</span>
+      </div>
+      <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:12.5px;color:var(--dim)">
+        Bungram 只需抄 8 个：<code style="color:#8fb8ff">/me /shrug /spoiler /plain /nick /topic /invite /leave</code>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>类 / 方法级取证</h2>
+    <div class="grid3">
+      <div class="card">
+        <h3>SecretChatHelper</h3>
+        <div class="tag">Telegram · 101 方法 / 10 字段</div>
+        <div style="margin-top:14px;font-size:12.5px;color:var(--dim);line-height:1.9">
+          <code>performSendEncryptedRequest</code> ×3<br>
+          <code>processUpdateEncryption</code><br>
+          <code>requestNewSecretChatKey</code><br>
+          <code>acceptSecretChat</code>
+        </div>
+        <div style="margin-top:14px;font-size:11.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:10px">
+          密钥协商是四步状态机，不是「发一条加密消息」
+        </div>
+      </div>
+      <div class="card">
+        <h3>JobManager</h3>
+        <div class="tag">Signal · 75 方法 / 10 字段</div>
+        <div style="margin-top:14px;font-size:12.5px;color:var(--dim);line-height:1.9">
+          <code>add</code> ×4 重载<br>
+          <code>addAll</code><br>
+          <code>$r8$lambda$</code> ×12（内联回调）
+        </div>
+        <div style="margin-top:14px;font-size:11.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:10px">
+          调度器 + 依赖图 + 重试策略三合一
+        </div>
+      </div>
+      <div class="card">
+        <h3>TimelinePresenter</h3>
+        <div class="tag">Element X · 4 方法 / 25 字段</div>
+        <div style="margin-top:14px;font-size:12.5px;color:var(--dim);line-height:1.9">
+          <code>&lt;init&gt;</code><br>
+          <code>getTimelineItems</code><br>
+          <code>focusOnEvent</code><br>
+          <code>present</code>
+        </div>
+        <div style="margin-top:14px;font-size:11.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:10px">
+          25 个字段 = 大量 StateFlow；Presenter 只编排，不做 IO
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div style="font-size:12.5px;color:var(--dim2);margin-bottom:10px">方法体反编译 · <code>getTimelineItems()</code> · body_status: available</div>
+      <pre style="background:#0b0c10;border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto;font-size:12px;color:#c3c9d8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">public final ImmutableList getTimelineItems() {
+    return (ImmutableList) this.timelineItems$delegate.getValue();
+}</pre>
+      <div style="font-size:11.5px;color:var(--dim2);margin-top:10px">evidence <code>ev_df701aca0e8c5a244ee344a0259abfafb8fd5e9688641c1ffc70ea8ccf490411</code></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div style="font-size:12.5px;color:var(--dim2);margin-bottom:10px">引用图 · 谁在用 <code>RoomListPresenter</code> · 12 个入向节点</div>
+      <div class="chips">
+        <span class="chip">HomeFlowNode$onBuilt$2$1</span>
+        <span class="chip">FtueFlowNode</span>
+        <span class="chip">RoomListPresenter$present$3$1</span>
+        <span class="chip">RoomListPresenter$present$handleEvent$2</span>
+        <span class="chip">RoomListPresenter$present$showAllActivity$2$1</span>
+        <span class="chip">RoomListPresenter$$ExternalSyntheticLambda0</span>
+        <span class="chip">MetroFactory</span>
+        <span class="chip">SdkRoomInfoKt$roomInfoUpdates$1</span>
+        <span class="chip">CallStageKt$CallStage$1$1</span>
+        <span class="chip">RealImageLoader$execute$result$1</span>
+        <span class="chip">SearchBarKt$SearchBar$2$1</span>
+        <span class="chip">AnonymousClass1</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--dim2);margin-top:12px">一个 Presenter 只有一个真宿主 —— 单向数据流在字节码层面的样子</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>APK 里面到底是什么</h2>
+    <div class="card" style="padding:8px 4px">
+      <table class="compact">
+        <thead><tr><th>组件</th><th class="num">Telegram</th><th class="num">Signal</th><th class="num">Element X</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>dex</td><td class="num">4</td><td class="num win">6</td><td class="num">4</td><td>多 dex 说明方法数超 64K</td></tr>
+          <tr><td>native <code>.so</code>（去重）</td><td class="num win">2</td><td class="num">12</td><td class="num">16</td><td>Telegram 两个库干完所有事，另两家一库一职</td></tr>
+          <tr><td>javascript</td><td class="num">5</td><td class="num">2</td><td class="num win">14</td><td>Element 的 14 个全是自己的通话 SPA</td></tr>
+          <tr><td>JNI 桥接候选</td><td class="num">32</td><td class="num win">288</td><td class="num">64</td><td>Signal 每个 native 库都有独立方法族</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid3" style="margin-top:14px">
+      <div class="card">
+        <h3>Telegram · 一个 22MB 核心</h3>
+        <div class="tag">libtmessages.49.so</div>
+        <div style="margin-top:12px;font-size:12.5px;color:var(--dim);line-height:1.9">
+          MTProto + SQLite + 加密 + WebRTC<br>全部在这一个 C++ 库里。
+        </div>
+        <div style="margin-top:12px;font-size:11.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:10px">
+          Java 层 358 个文件只是壳
+        </div>
+      </div>
+      <div class="card">
+        <h3>Signal · 12 个专用库</h3>
+        <div class="tag">libsignal_jni · libringrtc · libsqlcipher …</div>
+        <div style="margin-top:12px;font-size:12.5px;color:var(--dim);line-height:1.9">
+          协议、通话、加密数据库、支付、TLS<br>各占一个 native 库。
+        </div>
+        <div style="margin-top:12px;font-size:11.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:10px">
+          安全靠隔离，不靠代码规范
+        </div>
+      </div>
+      <div class="card">
+        <h3>Element X · 内嵌一个网页</h3>
+        <div class="tag">assets/element-call/</div>
+        <div style="margin-top:12px;font-size:12.5px;color:var(--dim);line-height:1.9">
+          通话是 React 单页应用，<br>跑在 WebView 里，状态存 IndexedDB。
+        </div>
+        <div style="margin-top:12px;font-size:11.5px;color:var(--dim2);border-top:1px solid var(--line);padding-top:10px">
+          <span style="color:var(--violet)">本轮最大发现</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div style="font-size:12.5px;color:var(--dim2);margin-bottom:10px">Telegram 的 5 个 JS 是内置浏览器注入层，不是业务逻辑</div>
+      <div class="chips">
+        <span class="chip">mfu.js · 57K · DOMPurify</span>
+        <span class="chip">dPJ.js · 5.7K · Mini Apps 手势</span>
+        <span class="chip">wyi.js · 13K · 同上另一版</span>
+        <span class="chip">NuZ.js · 2.2K · Web Share polyfill</span>
+        <span class="chip">a8x.js · 400B · hidden=until-found polyfill</span>
+      </div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--dim)">
+        三条通话路线成本差 10 倍：自研 C++（Telegram）→ RingRTC（Signal）→ WebView + SPA（Element）。
+        <b style="color:var(--txt)">Bungram 的 P6 应该走第三条。</b>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>rea 命令覆盖 · 153 条里用了哪 18 条</h2>
+    <div class="kpis" style="grid-template-columns:repeat(4,1fr)">
+      <div class="kpi"><div class="n">153</div><div class="l">rea 命令总数</div><div class="d">8 个类别</div></div>
+      <div class="kpi"><div class="n">18</div><div class="l">本轮实际执行</div><div class="d">含 4 条失败（已定位原因）</div></div>
+      <div class="kpi"><div class="n">8</div><div class="l">能对 APK 跑的命令</div><div class="d">全部已用，最深到方法体</div></div>
+      <div class="kpi"><div class="n">72</div><div class="l">环境不支持的命令</div><div class="d">无 Ghidra / 真机 / CDP</div></div>
+    </div>
+
+    <div class="card" style="margin-top:14px;padding:8px 4px">
+      <table class="compact">
+        <thead><tr><th>类别</th><th class="num">条数</th><th class="num">本机可用</th><th>代表命令</th></tr></thead>
+        <tbody>
+          <tr><td>二进制 / 通用</td><td class="num">63</td><td class="num mid">部分</td><td><code>inspect-artifact</code> <code>analyze</code> <code>compare</code></td></tr>
+          <tr><td>Android 设备（adb）</td><td class="num">24</td><td class="num bad">0</td><td><code>list-adb-devices</code> <code>install-adb-package</code></td></tr>
+          <tr><td>原生 / macOS</td><td class="num">21</td><td class="num bad">0</td><td><code>inspect-macho</code> <code>inspect-plist</code></td></tr>
+          <tr><td>Web / 浏览器</td><td class="num">13</td><td class="num bad">0</td><td><code>inspect-web-page</code> <code>capture-web-screenshot</code></td></tr>
+          <tr><td>调试器 / JEB / Frida</td><td class="num">11</td><td class="num bad">0</td><td><code>debug-with-gdb</code> <code>instrument-with-frida</code></td></tr>
+          <tr><td>Android / APK</td><td class="num">8</td><td class="num win">8</td><td><code>inspect-android-class</code> <code>trace-android-references</code></td></tr>
+          <tr><td>环境 / 集成</td><td class="num">6</td><td class="num win">6</td><td><code>doctor</code> <code>capabilities</code> <code>providers</code></td></tr>
+          <tr><td>其他</td><td class="num">8</td><td class="num mid">部分</td><td><code>inspect</code> <code>execute-rizin-command</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note" style="margin-top:14px">
+      <b>关键分界：rea 有两条完全独立的通道。</b>
+      原生通道吃 <code>.so</code>/<code>.exe</code>（Ghidra/IDA/Hopper），Android 通道吃 <code>.apk</code>（jadx）。
+      <code>rea analyze apk/telegram.apk</code> 会直接报 <code>target_unsupported</code>——它压根不认为 APK 属于自己。
+      这也是为什么 8 条 Android 命令虽少，却覆盖了 90% 的实际需求。
+    </div>
+  </section>
+
+  <section>
+    <h2>移植路线 P1–P6</h2>
+    <div class="card">
+      <div class="timeline">
+        <div class="step">
+          <div class="t"><em>P1</em>消息真正走服务端</div>
+          <div class="d">把 <code>MessagesScreen</code> 的 demo 源换成 <code>MessagesRepository</code>，新增 <code>MessagesPresenter</code>。验收：断网重连不丢消息。</div>
+        </div>
+        <div class="step">
+          <div class="t"><em>P2</em>离线队列（抄 Signal）</div>
+          <div class="d">新建 <code>data/queue/OutboxWorker.kt</code>，先做 12 个 job，Room 持久化。验收：飞行模式发 5 条，恢复后按序送达。</div>
+        </div>
+        <div class="step">
+          <div class="t"><em>P3</em>本地库（抄 Telegram 表结构）</div>
+          <div class="d">Room：<code>messages(id, chat_id, seq, sender, kind, ciphertext, state, ts)</code> + FTS4。验收：1 万条冷启动 &lt; 300ms。</div>
+        </div>
+        <div class="step">
+          <div class="t"><em>P4</em>E2EE（抄 Signal 协议，不自研）</div>
+          <div class="d">引 <code>libsignal-client</code>，<code>crypto/SessionStore.kt</code>，密钥状态机照 SecretChatHelper。验收：服务端抓包无明文。</div>
+        </div>
+        <div class="step">
+          <div class="t"><em>P5</em>媒体管线</div>
+          <div class="d"><code>media/Uploader.kt</code> 分片 + 断点续传 + 缩略图。验收：50MB 视频弱网可续传。</div>
+        </div>
+        <div class="step">
+          <div class="t"><em>P6</em>通话</div>
+          <div class="d">WebRTC + 信令复用 WS；权限只加 4 个。验收：1:1 通话 3 分钟不崩。</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>诚实清单</h2>
+    <div class="note">
+      <b>1.</b> Telegram APK 已混淆（类名 <code>a.a</code>），类级取证只能靠源码仓库。<br>
+      <b>2.</b> Signal 全量类清单首次并发执行失败（三个 JADX 抢内存），单跑 + 前缀过滤后成功：7,346 / 22,008。<br>
+      <b>3.</b> apktool 只解出 105 条 string 资源 —— Telegram 文案在 <code>LocaleController</code> 里，不在 strings.xml。<br>
+      <b>4.</b> 没有真机，组件 exported 行为、后台限制、厂商角标均未实测。<br>
+      <b>5.</b> 权限按短名归类，少数自定义权限落入 other，已在报告 §2.3 单列。
+    </div>
+  </section>
+
+  <footer>
+    <span>Bungram · REA dossier round 2 · 2026-11-04</span>
+    <span>rea 6.7.0 · jadx 0.7.1 · apktool 2.9.3 · 3 commits pinned</span>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bungram — UI Reference Build</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#5667F5;
+    --blue-soft:#EDEFFF;
+    --blue-ghost:#F2F4FF;
+    --ink:#11131C;
+    --muted:#9AA1B2;
+    --tertiary:#BFC5D2;
+    --surface:#F4F5F9;
+    --surface-2:#F7F8FB;
+    --line:#F0F1F6;
+    --danger:#FF4D4F;
+    --online:#34C759;
+    --canvas:#fff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif,'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji';
+    background:#E9EAEF;
+    color:var(--ink);
+    min-height:100vh;
+    display:flex;flex-direction:column;align-items:center;
+    padding:44px 24px 64px;
+    gap:28px;
+  }
+  .page-head{width:100%;max-width:1240px;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand-mark{width:40px;height:40px;border-radius:12px;background:var(--blue);display:grid;place-items:center;color:#fff;font-weight:700;font-size:20px;box-shadow:0 8px 20px rgba(86,103,245,.32)}
+  .brand h1{font-size:19px;margin:0;letter-spacing:-.3px}
+  .brand p{margin:2px 0 0;font-size:11.5px;color:#7A8194}
+  .legend{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-size:10.5px;font-weight:500;color:#5C6377;background:#fff;border:1px solid #E2E4EB;padding:6px 11px;border-radius:99px}
+  .stage{display:flex;gap:40px;align-items:flex-start;justify-content:center;flex-wrap:wrap}
+  .phone-wrap{display:flex;flex-direction:column;gap:12px;align-items:center}
+  .phone-caption{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#8A91A3;font-weight:600}
+  .phone{
+    position:relative;width:390px;height:844px;background:#fff;border-radius:46px;
+    box-shadow:0 0 0 10px #101218, 0 0 0 12px #2A2D36, 0 34px 70px -18px rgba(16,18,24,.45);
+    overflow:hidden;display:flex;flex-direction:column;isolation:isolate;
+  }
+  .phone::after{content:'';position:absolute;left:50%;transform:translateX(-50%);bottom:8px;width:132px;height:5px;border-radius:99px;background:#0E1016;opacity:.9;z-index:60}
+  .notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:112px;height:26px;background:#101218;border-radius:99px;z-index:55}
+
+  /* ---------- status bar ---------- */
+  .statusbar{height:46px;flex:0 0 46px;display:flex;align-items:center;justify-content:space-between;padding:0 26px 0 30px;font-size:13px;font-weight:600;letter-spacing:-.2px;z-index:40;background:transparent}
+  .statusbar .right{display:flex;align-items:center;gap:5px}
+  .statusbar svg{display:block}
+
+  /* ---------- generic ---------- */
+  .screen{flex:1;display:flex;flex-direction:column;min-height:0;position:relative;background:#fff}
+  .ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto}
+  .ic.fill{fill:currentColor;stroke:none}
+  .circle-btn{width:38px;height:38px;border-radius:50%;background:var(--surface);display:grid;place-items:center;color:var(--ink);border:0;cursor:pointer;transition:background .16s}
+  .circle-btn:active{background:#E9EBF2}
+  .circle-btn.ghost{background:transparent}
+  h1.title{font-size:27px;line-height:32px;letter-spacing:-.8px;font-weight:700;margin:0}
+  .search{height:46px;border-radius:14px;background:var(--surface);display:flex;align-items:center;gap:9px;padding:0 13px;color:var(--tertiary)}
+  .search input{border:0;background:transparent;outline:none;flex:1;font:inherit;font-size:12.5px;color:var(--ink);min-width:0}
+  .search input::placeholder{color:var(--tertiary)}
+  .search .filter{color:var(--ink);display:grid;place-items:center;cursor:pointer}
+
+  /* ---------- bottom nav ---------- */
+  .tabbar{position:absolute;left:0;right:0;bottom:0;height:76px;background:#fff;border-radius:28px 28px 0 0;
+    box-shadow:0 -14px 34px -14px rgba(17,19,28,.18);display:flex;align-items:flex-start;padding:8px 6px 0;z-index:30}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:9px;color:var(--tertiary);cursor:pointer;font-size:9.5px;font-weight:500;position:relative;user-select:none}
+  .tab.active{color:var(--blue);font-weight:600}
+  .tab .badge{position:absolute;top:3px;right:calc(50% - 18px);min-width:14px;height:14px;border-radius:99px;background:var(--danger);color:#fff;font-size:8px;font-weight:700;display:grid;place-items:center;padding:0 3px}
+  .tab-gap{width:74px;flex:0 0 74px}
+  .fab{position:absolute;left:50%;transform:translateX(-50%);top:-18px;width:56px;height:56px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;border:0;cursor:pointer;box-shadow:0 12px 26px -6px rgba(86,103,245,.7);transition:transform .15s}
+  .fab:active{transform:translateX(-50%) scale(.94)}
+
+  /* ---------- message list ---------- */
+  .list-head{display:flex;align-items:center;padding:4px 18px 2px 22px;gap:10px}
+  .list-head h1{flex:1}
+  .list-head .circle-btn{background:var(--surface)}
+  .search-row{padding:10px 20px 6px}
+  .section-row{display:flex;justify-content:space-between;align-items:center;padding:8px 22px 10px;font-size:11px;font-weight:600;color:var(--blue)}
+  .section-row .right{font-weight:500;opacity:.95;cursor:pointer}
+  .people{display:flex;gap:10px;padding:2px 16px 8px;overflow:hidden}
+  .person{width:58px;flex:0 0 58px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
+  .person .name{font-size:9.5px;font-weight:500;color:var(--ink);max-width:58px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .avatar{position:relative;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:600;overflow:visible;flex:0 0 auto}
+  .avatar .img{position:absolute;inset:0;border-radius:50%;overflow:hidden;background:transparent}
+  .avatar .img img{width:100%;height:100%;object-fit:cover;display:block}
+  .avatar .ring{position:absolute;inset:-4px;border-radius:50%;border:1.6px solid var(--blue)}
+  .avatar .initials{font-size:15px;letter-spacing:.2px}
+  .avatar .dot{position:absolute;right:0;bottom:0;width:13px;height:13px;border-radius:50%;background:var(--online);border:2.5px solid #fff}
+  .chats{flex:1;overflow:auto;padding:4px 0 96px;scrollbar-width:none}
+  .chats::-webkit-scrollbar{display:none}
+  .chat-row{display:flex;align-items:center;gap:12px;padding:9px 20px;cursor:pointer;transition:background .14s}
+  .chat-row:hover{background:#FAFAFD}
+  .chat-row .body{flex:1;min-width:0}
+  .chat-row .top{display:flex;align-items:center;gap:4px}
+  .chat-row .name{font-size:14.5px;font-weight:600;letter-spacing:-.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chat-row .sub{font-size:11.8px;color:var(--muted);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chat-row .meta{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:0 0 auto;padding-top:1px}
+  .chat-row .time{font-size:9.8px;color:var(--tertiary);font-weight:500}
+  .badge{min-width:18px;height:18px;border-radius:99px;background:var(--blue);color:#fff;font-size:9px;font-weight:600;display:grid;place-items:center;padding:0 4px}
+  .verified{color:var(--blue)}
+  .ticks{color:var(--tertiary);display:flex}
+
+  /* ---------- chat ---------- */
+  .chat-head{display:flex;align-items:center;gap:8px;padding:2px 10px 8px 2px;background:#fff;z-index:20}
+  .chat-head .who{flex:1;min-width:0}
+  .chat-head .who .n{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chat-head .who .s{font-size:10px;color:var(--muted);margin-top:1px}
+  .icon-btn{width:38px;height:38px;border:0;background:transparent;display:grid;place-items:center;color:var(--ink);cursor:pointer;border-radius:50%}
+  .icon-btn:active{background:var(--surface)}
+  .chat-body{flex:1;position:relative;overflow:auto;padding:16px 14px 14px;scrollbar-width:none;
+    background:#FCFCFD;background-image:radial-gradient(#EDEFF4 1.05px, transparent 1.05px);background-size:24px 24px;background-position:0 0}
+  .chat-body::-webkit-scrollbar{display:none}
+  .date-pill{width:max-content;margin:2px auto 12px;background:#fff;border-radius:99px;padding:6px 12px;font-size:9.5px;color:var(--muted);box-shadow:0 2px 6px rgba(17,19,28,.05)}
+  .msg{display:flex;margin-bottom:11px}
+  .msg.out{justify-content:flex-end}
+  .emoji{width:13px;height:13px;vertical-align:-2px;display:inline-block}
+  .bubble{max-width:298px;padding:9px 13px;font-size:12.8px;line-height:1.42;border-radius:18px;position:relative;white-space:normal;word-break:break-word}
+  .msg.in .bubble{background:#fff;border-bottom-left-radius:5px;box-shadow:0 2px 8px rgba(17,19,28,.055);color:var(--ink)}
+  .msg.out .bubble{background:var(--blue);border-bottom-right-radius:5px;color:#fff}
+  .bubble .meta{display:flex;align-items:center;justify-content:flex-end;gap:3px;margin-top:4px;font-size:8.4px}
+  .msg.in .bubble .meta{color:var(--tertiary)}
+  .msg.out .bubble .meta{color:rgba(255,255,255,.74)}
+  .filecard{width:238px;border-radius:12px;padding:9px;display:flex;align-items:center;gap:9px;margin-bottom:8px}
+  .msg.in .filecard{background:var(--surface)}
+  .msg.out .filecard{background:rgba(255,255,255,.15)}
+  .filecard .fico{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;flex:0 0 34px}
+  .msg.in .filecard .fico{background:var(--blue-ghost);color:var(--blue)}
+  .msg.out .filecard .fico{background:rgba(255,255,255,.2);color:#fff}
+  .filecard .fname{font-size:11.2px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .filecard .fsize{font-size:8.8px;opacity:.65;margin-top:1px}
+  .filecard .dl{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#fff;color:var(--ink);flex:0 0 24px}
+  .msg.out .filecard .dl{background:rgba(255,255,255,.22);color:#fff}
+  .composer{padding:8px 14px 12px;background:#fff;display:flex;align-items:center;gap:10px;z-index:25}
+  .plus{width:42px;height:42px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;border:0;cursor:pointer;flex:0 0 42px;box-shadow:0 8px 18px -8px rgba(86,103,245,.85);transition:transform .15s}
+  .plus:active{transform:scale(.93)}
+  .field{flex:1;height:44px;border-radius:22px;background:var(--surface);display:flex;align-items:center;gap:6px;padding:0 6px 0 16px}
+  .field input{flex:1;border:0;background:transparent;outline:none;font:inherit;font-size:12.6px;color:var(--ink);min-width:0}
+  .field input::placeholder{color:var(--tertiary)}
+  .field .send{width:32px;height:32px;border-radius:50%;border:0;background:transparent;color:var(--tertiary);display:grid;place-items:center;cursor:pointer}
+  .field .send.ready{color:var(--blue)}
+  .attach-menu{position:absolute;left:14px;right:14px;bottom:66px;background:#fff;border-radius:18px;box-shadow:0 22px 44px -12px rgba(17,19,28,.28),0 0 0 1px rgba(17,19,28,.03);padding:6px 0;z-index:40;
+    transform-origin:bottom left;transition:opacity .16s ease,transform .16s ease}
+  .attach-menu.hidden{opacity:0;transform:translateY(10px) scale(.98);pointer-events:none}
+  .attach-row{display:flex;align-items:center;gap:12px;padding:7px 14px;cursor:pointer;font-size:12.4px;color:var(--ink)}
+  .attach-row:hover{background:#FAFAFD}
+  .attach-row .box{width:30px;height:30px;border-radius:9px;background:var(--surface);display:grid;place-items:center;color:var(--ink)}
+  .reply-bar{display:flex;align-items:center;gap:8px;padding:6px 16px;background:#fff;font-size:11px;color:var(--muted)}
+  .reply-bar .bar{width:3px;height:26px;border-radius:2px;background:var(--blue)}
+
+  /* ---------- status ---------- */
+  .status-head{display:grid;grid-template-columns:38px 1fr 38px;align-items:center;padding:4px 20px 8px}
+  .status-head h1{text-align:center}
+  .status-rail{display:flex;gap:12px;padding:8px 18px 12px;overflow:hidden}
+  .story-person{width:56px;flex:0 0 56px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}
+  .story-person .name{font-size:9.5px;font-weight:500;max-width:56px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .status-grid{flex:1;overflow:auto;padding:0 16px 96px;display:grid;grid-template-columns:1fr 1fr;gap:10px;align-content:start;scrollbar-width:none}
+  .status-grid::-webkit-scrollbar{display:none}
+  .story-card{position:relative;border-radius:16px;overflow:hidden;background:linear-gradient(160deg,#D9DEE8,#C4CBD9);cursor:pointer;min-height:180px}
+  .story-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+  .story-card .shade{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,0) 42%,rgba(0,0,0,.62) 100%)}
+  .story-card .ring{position:absolute;inset:0;border:1.6px solid var(--blue);border-radius:16px}
+  .story-card .play{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.3);display:grid;place-items:center;color:#fff;backdrop-filter:blur(4px)}
+  .story-card .cap{position:absolute;left:10px;right:10px;bottom:9px;color:#fff}
+  .story-card .cap b{display:block;font-size:10.4px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .story-card .cap span{font-size:8.4px;opacity:.8}
+  .viewer{position:absolute;inset:0;background:#0B0C10;z-index:70;display:flex;flex-direction:column;opacity:0;pointer-events:none;transition:opacity .2s}
+  .viewer.open{opacity:1;pointer-events:auto}
+  .viewer .bars{display:flex;gap:3px;padding:54px 12px 8px}
+  .viewer .bars i{flex:1;height:2.5px;border-radius:9px;background:rgba(255,255,255,.3)}
+  .viewer .bars i.on{background:#fff}
+  .viewer .vhead{display:flex;align-items:center;gap:9px;padding:6px 14px;color:#fff}
+  .viewer .vhead .n{font-size:12px;font-weight:600}
+  .viewer .vhead .t{font-size:9.5px;opacity:.6}
+  .viewer .vbody{flex:1;display:grid;place-items:center;padding:10px 18px 24px}
+  .viewer .vbody img{width:100%;max-height:100%;object-fit:cover;border-radius:16px}
+  .viewer .vfoot{padding:0 16px 26px;color:#fff}
+  .viewer .vfoot input{width:100%;height:42px;border-radius:22px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:#fff;padding:0 16px;outline:none;font:inherit;font-size:12px}
+  .viewer .close{position:absolute;top:50px;right:14px;color:#fff;background:rgba(255,255,255,.14);border:0;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;cursor:pointer}
+
+  /* ---------- call / profile ---------- */
+  .call-row{display:flex;align-items:center;gap:12px;padding:10px 20px}
+  .call-row .n{font-size:14px;font-weight:600}
+  .call-row .s{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:4px}
+  .profile{flex:1;overflow:auto;padding-bottom:96px}
+  .profile .hero{display:flex;flex-direction:column;align-items:center;gap:7px;padding:8px 0 22px}
+  .profile .hero .n{font-size:17px;font-weight:600;display:flex;align-items:center;gap:5px}
+  .profile .hero .p{font-size:11.5px;color:var(--muted)}
+  .profile .hero .u{font-size:10.4px;color:var(--blue);background:var(--blue-ghost);border-radius:99px;padding:4px 10px;font-weight:500}
+  .settings{margin:0 18px;background:var(--surface);border-radius:18px;overflow:hidden}
+  .set-row{display:flex;align-items:center;gap:12px;padding:13px 14px;cursor:pointer}
+  .set-row+.set-row{border-top:.6px solid #ECEEF4}
+  .set-row .box{width:30px;height:30px;border-radius:9px;background:#fff;display:grid;place-items:center;flex:0 0 30px}
+  .set-row .txt{flex:1}
+  .set-row .txt b{display:block;font-size:12.8px;font-weight:500}
+  .set-row .txt span{font-size:10px;color:var(--muted)}
+  .foot{text-align:center;font-size:10px;color:var(--muted);padding:18px 0 0}
+
+  /* toast */
+  .toast{position:fixed;left:50%;bottom:30px;transform:translate(-50%,20px);background:#11131C;color:#fff;font-size:12px;padding:10px 16px;border-radius:99px;opacity:0;transition:.22s;z-index:200;pointer-events:none}
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  @media (max-width:1320px){ .stage{gap:26px} .phone{transform:scale(.92);transform-origin:top center} }
+  @media (max-width:1080px){ .phone{transform:scale(.86)} .stage{gap:0} }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5 21 21"/></symbol>
+    <symbol id="i-tune" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
+    <symbol id="i-qr" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1.6"/><rect x="14.5" y="3.5" width="6" height="6" rx="1.6"/><rect x="3.5" y="14.5" width="6" height="6" rx="1.6"/><path d="M14.5 14.5h2.5v2.5h-2.5zM19 19h1.5v1.5H19zM14.5 19.5h1.5"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M13.5 6.5 17.5 10.5"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="12.5" height="12" rx="3"/><path d="M15.5 11 21 8v8l-5.5-3z"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M6.2 3.8h2.6l1.4 3.7-1.8 1.5a11.5 11.5 0 0 0 5.6 5.6l1.5-1.8 3.7 1.4v2.6a2.2 2.2 0 0 1-2.4 2.2A16.4 16.4 0 0 1 4 6.2a2.2 2.2 0 0 1 2.2-2.4z"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M20.5 11.6c0 4.1-3.8 7.4-8.5 7.4-1 0-2-.2-2.9-.5L4 20l1.4-3.6A6.9 6.9 0 0 1 3.5 11.6C3.5 7.5 7.3 4.2 12 4.2s8.5 3.3 8.5 7.4z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M9 6.5 18 12l-9 5.5z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-add" viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3.5 8.5h3l1.5-2h7l1.5 2h3.5v10h-16.5z"/><circle cx="12" cy="13" r="3.4"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/></symbol>
+    <symbol id="i-photo" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4 17l5-4 4 3 3-2 4 3"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.6"/></symbol>
+    <symbol id="i-contact" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c1.2-3.6 4-5.4 7-5.4s5.8 1.8 7 5.4"/></symbol>
+    <symbol id="i-poll" viewBox="0 0 24 24"><path d="M6 20V11M12 20V5M18 20v-6"/></symbol>
+    <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5"/></symbol>
+    <symbol id="i-chev-right" viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10M8 11l4 4 4-4M5 19h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M4 12.5 9 17.5 20 6.5"/></symbol>
+    <symbol id="i-check2" viewBox="0 0 24 24"><path d="M1.5 12.5 6 17 15 7.5M8.5 15.5 11 18 21.5 7"/></symbol>
+    <symbol id="i-verified" viewBox="0 0 24 24"><path d="M12 2.8l2.3 1.7 2.8-.2 1 2.6 2.4 1.5-.7 2.7.7 2.7-2.4 1.5-1 2.6-2.8-.2L12 21.2l-2.3-1.7-2.8.2-1-2.6L3.5 15.6l.7-2.7-.7-2.7 2.4-1.5 1-2.6 2.8.2z" fill="currentColor" stroke="none"/><path d="M8.6 12.2l2.3 2.3 4.4-4.6" stroke="#fff" stroke-width="1.9"/></symbol>
+    <symbol id="i-call-in" viewBox="0 0 24 24"><path d="M20 4 9.5 14.5M9 9v6h6"/></symbol>
+    <symbol id="i-call-out" viewBox="0 0 24 24"><path d="M4 20 14.5 9.5M9 9h6v6"/></symbol>
+    <symbol id="i-signal" viewBox="0 0 24 24"><path d="M4 18v-2M9 18v-5M14 18v-8M19 18V5" stroke-width="2.4"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3 9.5a14 14 0 0 1 18 0M6 13a9.5 9.5 0 0 1 12 0M9.5 16.4a5 5 0 0 1 5 0" stroke-width="2.1"/><circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-battery" viewBox="0 0 26 24"><rect x="2" y="8" width="19" height="9" rx="3" stroke-width="1.6"/><rect x="4" y="10" width="15" height="5" rx="1.5" fill="currentColor" stroke="none"/><path d="M23 11v3" stroke-width="2"/></symbol>
+  </defs>
+</svg>
+
+<div class="page-head">
+  <div class="brand">
+    <div class="brand-mark">B</div>
+    <div>
+      <h1>Bungram — native Android UI build</h1>
+      <p>Kotlin · Jetpack Compose · pixel-matched to the reference screens</p>
+    </div>
+  </div>
+  <div class="legend">
+    <span class="chip">390 × 844 · @3x</span>
+    <span class="chip">Inter</span>
+    <span class="chip">#5667F5</span>
+    <span class="chip">Try it — tap around</span>
+  </div>
+</div>
+
+<div class="stage">
+
+  <!-- ============================= PHONE 1 : MESSAGE LIST ============================= -->
+  <div class="phone-wrap">
+    <div class="phone" id="phoneA">
+      <div class="notch"></div>
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="right">
+          <svg class="ic" style="width:17px;height:14px" viewBox="0 0 24 24"><use href="#i-signal"/></svg>
+          <svg class="ic" style="width:16px;height:14px" viewBox="0 0 24 24"><use href="#i-wifi"/></svg>
+          <svg class="ic" style="width:23px;height:14px" viewBox="0 0 26 24"><use href="#i-battery"/></svg>
+        </span>
+      </div>
+
+      <div class="screen">
+        <!-- MESSAGE -->
+        <div class="view" data-view="message" style="display:flex;flex-direction:column;flex:1;min-height:0">
+          <div class="list-head">
+            <h1 class="title">Message</h1>
+            <button class="circle-btn" aria-label="Scan QR"><svg class="ic" style="width:19px;height:19px"><use href="#i-qr"/></svg></button>
+            <button class="circle-btn" aria-label="New message"><svg class="ic" style="width:19px;height:19px"><use href="#i-edit"/></svg></button>
+          </div>
+
+          <div class="search-row">
+            <div class="search">
+              <svg class="ic" style="width:18px;height:18px"><use href="#i-search"/></svg>
+              <input placeholder="Search..." />
+              <span class="filter"><svg class="ic" style="width:19px;height:19px"><use href="#i-tune"/></svg></span>
+            </div>
+          </div>
+
+          <div class="section-row"><span>New Group</span><span class="right">Archive (3)</span></div>
+
+          <div class="people" id="peopleRail"></div>
+
+          <div class="chats" id="chatList"></div>
+        </div>
+
+        <!-- STATUS (switched by tab) -->
+        <div class="view" data-view="status" style="display:none;flex-direction:column;flex:1;min-height:0"></div>
+        <!-- CALL -->
+        <div class="view" data-view="call" style="display:none;flex-direction:column;flex:1;min-height:0"></div>
+        <!-- PROFILE -->
+        <div class="view" data-view="profile" style="display:none;flex-direction:column;flex:1;min-height:0"></div>
+
+        <div class="tabbar">
+          <div class="tab active" data-tab="message"><svg class="ic" style="width:22px;height:22px"><use href="#i-chat"/></svg><span>Message</span></div>
+          <div class="tab" data-tab="status"><svg class="ic" style="width:22px;height:22px"><use href="#i-grid"/></svg><span>Status</span></div>
+          <div class="tab-gap"></div>
+          <div class="tab" data-tab="call"><span class="badge">1</span><svg class="ic" style="width:22px;height:22px"><use href="#i-phone"/></svg><span>Call</span></div>
+          <div class="tab" data-tab="profile"><svg class="ic" style="width:22px;height:22px"><use href="#i-contact"/></svg><span>Profile</span></div>
+          <button class="fab" id="fabNew"><svg class="ic" style="width:26px;height:26px"><use href="#i-plus"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div class="phone-caption">01 · Message</div>
+  </div>
+
+  <!-- ============================= PHONE 2 : CHAT ============================= -->
+  <div class="phone-wrap">
+    <div class="phone" id="phoneB">
+      <div class="notch"></div>
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="right">
+          <svg class="ic" style="width:17px;height:14px" viewBox="0 0 24 24"><use href="#i-signal"/></svg>
+          <svg class="ic" style="width:16px;height:14px" viewBox="0 0 24 24"><use href="#i-wifi"/></svg>
+          <svg class="ic" style="width:23px;height:14px" viewBox="0 0 26 24"><use href="#i-battery"/></svg>
+        </span>
+      </div>
+
+      <div class="screen">
+        <div class="chat-head">
+          <button class="icon-btn"><svg class="ic" style="width:24px;height:24px"><use href="#i-chev-left"/></svg></button>
+          <div class="avatar" style="width:40px;height:40px;background:linear-gradient(135deg,#7C8BFF,#9FA9FF)">
+            <span class="initials" style="font-size:13px">AC</span>
+            <span class="img"><img src="https://i.pravatar.cc/120?img=12" onerror="this.remove()" alt=""></span>
+            <span class="dot" style="width:11px;height:11px;border-width:2px"></span>
+          </div>
+          <div class="who">
+            <div class="n">Abdurrahman Client</div>
+            <div class="s">Online</div>
+          </div>
+          <button class="icon-btn"><svg class="ic" style="width:22px;height:22px"><use href="#i-video"/></svg></button>
+          <button class="icon-btn"><svg class="ic" style="width:20px;height:20px"><use href="#i-phone"/></svg></button>
+        </div>
+
+        <div class="chat-body" id="chatBody">
+          <div class="date-pill">Today, May 10</div>
+
+          <div class="msg in">
+            <div class="bubble">Hi Momon!<br>How about this project?<div class="meta">22:24</div></div>
+          </div>
+
+          <div class="msg out">
+            <div class="bubble">Hi Fitrial <img class="emoji" alt="👋" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.0.3/assets/svg/1f44b.svg"><br>I will report you soon as possible.<div class="meta">22:29 <svg class="ic" style="width:12px;height:12px;stroke-width:2.4"><use href="#i-check2"/></svg></div></div>
+          </div>
+
+          <div class="msg in">
+            <div class="bubble">Sound good!<img class="emoji" alt="🔥" src="https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.0.3/assets/svg/1f525.svg"><div class="meta">22:31</div></div>
+          </div>
+
+          <div class="msg in">
+            <div class="bubble" style="padding:9px">
+              <div class="filecard" style="margin-bottom:0">
+                <div class="fico"><svg class="ic" style="width:18px;height:18px"><use href="#i-file"/></svg></div>
+                <div style="flex:1;min-width:0">
+                  <div class="fname">Mostate_Brief.pdf</div>
+                  <div class="fsize">245 kb</div>
+                </div>
+                <div class="dl"><svg class="ic" style="width:14px;height:14px"><use href="#i-download"/></svg></div>
+              </div>
+            </div>
+          </div>
+          <div class="msg in">
+            <div class="bubble">This is brief from Snapie. You can check on this file!<div class="meta">22:36</div></div>
+          </div>
+
+          <div class="msg out">
+            <div class="bubble">Okey! thanks Rahman!<div class="meta">23:10 <svg class="ic" style="width:12px;height:12px;stroke-width:2.4"><use href="#i-check2"/></svg></div></div>
+          </div>
+        </div>
+
+        <div class="attach-menu hidden" id="attachMenu">
+          <div class="attach-row" data-kind="camera"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-camera"/></svg></span>Camera</div>
+          <div class="attach-row" data-kind="file"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-file"/></svg></span>Document</div>
+          <div class="attach-row" data-kind="photo"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-photo"/></svg></span>Photo &amp; Video</div>
+          <div class="attach-row" data-kind="location"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-pin"/></svg></span>Location</div>
+          <div class="attach-row" data-kind="contact"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-contact"/></svg></span>Contact</div>
+          <div class="attach-row" data-kind="poll"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-poll"/></svg></span>Polling</div>
+        </div>
+
+        <div class="composer">
+          <button class="plus" id="plusBtn"><svg class="ic" style="width:22px;height:22px"><use href="#i-plus"/></svg></button>
+          <div class="field">
+            <input id="msgInput" placeholder="Type Here..." />
+            <button class="send" id="sendBtn"><svg class="ic" style="width:18px;height:18px"><use href="#i-mic"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="phone-caption">02 · Chat</div>
+  </div>
+
+  <!-- ============================= PHONE 3 : STATUS ============================= -->
+  <div class="phone-wrap">
+    <div class="phone" id="phoneC">
+      <div class="notch"></div>
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="right">
+          <svg class="ic" style="width:17px;height:14px" viewBox="0 0 24 24"><use href="#i-signal"/></svg>
+          <svg class="ic" style="width:16px;height:14px" viewBox="0 0 24 24"><use href="#i-wifi"/></svg>
+          <svg class="ic" style="width:23px;height:14px" viewBox="0 0 26 24"><use href="#i-battery"/></svg>
+        </span>
+      </div>
+
+      <div class="screen">
+        <div class="status-head">
+          <button class="circle-btn ghost"><svg class="ic" style="width:21px;height:21px"><use href="#i-grid"/></svg></button>
+          <h1 class="title">Status</h1>
+          <button class="circle-btn"><svg class="ic" style="width:20px;height:20px"><use href="#i-add"/></svg></button>
+        </div>
+
+        <div class="search-row" style="padding:4px 20px 2px">
+          <div class="search">
+            <svg class="ic" style="width:18px;height:18px"><use href="#i-search"/></svg>
+            <input placeholder="Search..." />
+          </div>
+        </div>
+
+        <div class="status-rail" id="statusRail"></div>
+        <div class="status-grid" id="statusGrid"></div>
+
+        <div class="tabbar">
+          <div class="tab" data-tab="message"><svg class="ic" style="width:22px;height:22px"><use href="#i-chat"/></svg><span>Message</span></div>
+          <div class="tab active" data-tab="status"><svg class="ic" style="width:22px;height:22px"><use href="#i-grid"/></svg><span>Status</span></div>
+          <div class="tab-gap"></div>
+          <div class="tab" data-tab="call"><span class="badge">1</span><svg class="ic" style="width:22px;height:22px"><use href="#i-phone"/></svg><span>Call</span></div>
+          <div class="tab" data-tab="profile"><svg class="ic" style="width:22px;height:22px"><use href="#i-contact"/></svg><span>Profile</span></div>
+          <button class="fab"><svg class="ic" style="width:26px;height:26px"><use href="#i-plus"/></svg></button>
+        </div>
+      </div>
+
+      <div class="viewer" id="viewer">
+        <div class="bars"><i class="on"></i><i></i><i></i><i></i></div>
+        <button class="close" id="viewerClose"><svg class="ic" style="width:15px;height:15px"><use href="#i-close"/></svg></button>
+        <div class="vhead">
+          <div class="avatar" style="width:32px;height:32px;background:linear-gradient(135deg,#FF9BB0,#FFC3CE)">
+            <span class="initials" style="font-size:11px">F</span>
+            <span class="img"><img src="https://i.pravatar.cc/80?img=5" onerror="this.remove()" alt=""></span>
+          </div>
+          <div><div class="n">Fazaaa</div><div class="t">1h ago</div></div>
+        </div>
+        <div class="vbody"><img id="viewerImg" src="https://picsum.photos/seed/bungram1/600/900" alt=""></div>
+        <div class="vfoot"><input placeholder="Send a reply..."></div>
+      </div>
+    </div>
+    <div class="phone-caption">03 · Status</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ------------------------------------------------------------------ data */
+const PEOPLE = [
+  {name:'Fazaaa', img:5,  ring:true},
+  {name:'Riauli', img:9,  ring:true},
+  {name:'Vito A', img:33, ring:true},
+  {name:'May Adri', img:44, ring:true},
+  {name:'Farman Baig', img:12, ring:true},
+  {name:'Jop', img:15, ring:false}
+];
+
+const CHATS = [
+  {name:'Abdurrahman Client', img:12, preview:'Okay! thanks Fitri!', time:'12:23 PM', unread:0, out:true, read:true, verified:true},
+  {name:'+92 287 918273', img:null, preview:'Hello Momon! Nice to meet you!', time:'9:29 PM', unread:1},
+  {name:'Christ Client', img:51, preview:'I will waiting update from u!', time:'7:36 AM', unread:3},
+  {name:'Johan Fauzan', img:13, preview:'Hello Momon!', time:'Yesterday', unread:3},
+  {name:'+62 85292410704', img:null, preview:'https://dribbble.com/abdulmugni...', time:'29/03/2023', unread:1},
+  {name:'Fazaaa', img:5, preview:'yo mene wae', time:'27/03/2023', unread:0}
+];
+
+const STORIES = [
+  {name:'Fazaaa', handle:'@fazaaa', img:5, seed:'bungram1', cap:'Morning coffee', viewed:false, h:246},
+  {name:'Riauli', handle:'@riauli', img:9, seed:'bungram2', cap:'Studio day', viewed:false, h:212},
+  {name:'Vito A', handle:'@adhitya', img:33, seed:'bungram3', cap:'5:47', viewed:true, h:228},
+  {name:'May Adri', handle:'@azharaa', img:44, seed:'bungram4', cap:'The Violet Room', viewed:false, h:206}
+];
+
+const GRADS = [
+  'linear-gradient(135deg,#7C8BFF,#9FA9FF)',
+  'linear-gradient(135deg,#6ED0C0,#9BE3D6)',
+  'linear-gradient(135deg,#FFB37A,#FFD3A8)',
+  'linear-gradient(135deg,#B49BFF,#D3C4FF)',
+  'linear-gradient(135deg,#FF9BB0,#FFC3CE)',
+  'linear-gradient(135deg,#7FB8FF,#B3D4FF)'
+];
+
+const initials = n => n.replace(/[^A-Za-z ]/g,'').trim().split(/\s+/).filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase() || '';
+const grad = n => GRADS[[...n].reduce((a,c)=>a+c.charCodeAt(0),0)%GRADS.length];
+
+/* ------------------------------------------------------------------ render */
+function avatar(name, size, img, opts={}){
+  const inner = Math.max(size - (opts.ring?7:0), 20);
+  return `<div class="avatar" style="width:${inner}px;height:${inner}px;background:${grad(name)}">
+      ${opts.ring?`<span class="ring" style="inset:-${(size-inner)/2}px"></span>`:''}
+      ${initials(name)
+        ? `<span class="initials" style="font-size:${Math.round(inner*0.33)}px">${initials(name)}</span>`
+        : `<svg class="ic" style="width:${Math.round(inner*0.46)}px;height:${Math.round(inner*0.46)}px;color:rgba(255,255,255,.92)"><use href="#i-contact"/></svg>`}
+      ${img?`<span class="img"><img src="https://i.pravatar.cc/160?img=${img}" onerror="this.remove()" alt=""></span>`:''}
+      ${opts.online?'<span class="dot"></span>':''}
+    </div>`;
+}
+
+document.getElementById('peopleRail').innerHTML = PEOPLE.map(p=>`
+  <div class="person">${avatar(p.name, 52, p.img, {ring:p.ring})}<span class="name">${p.name.split(' ')[0]}</span></div>
+`).join('');
+
+document.getElementById('chatList').innerHTML = CHATS.map((c,i)=>`
+  <div class="chat-row" data-chat="${i}">
+    ${avatar(c.name, 48, c.img)}
+    <div class="body">
+      <div class="top">
+        <span class="name">${c.name}</span>
+        ${c.verified?`<svg class="ic verified" style="width:13px;height:13px"><use href="#i-verified"/></svg>`:''}
+      </div>
+      <div class="sub">${c.preview}</div>
+    </div>
+    <div class="meta">
+      <span class="time">${c.time}</span>
+      ${c.unread?`<span class="badge">${c.unread}</span>`
+        : c.out?`<span class="ticks"><svg class="ic" style="width:14px;height:14px;stroke-width:2.2;color:${c.read?'#5667F5':'#BFC5D2'}"><use href="#i-check2"/></svg></span>`
+        : '<span style="height:18px"></span>'}
+    </div>
+  </div>
+`).join('');
+
+document.getElementById('statusRail').innerHTML = `
+  <div class="story-person">
+    <div style="position:relative">
+      <div style="width:52px;height:52px;border-radius:50%;background:#F4F5F9;display:grid;place-items:center;color:#BFC5D2;box-shadow:inset 0 0 0 1.4px #E7E9F0">
+        <svg class="ic" style="width:23px;height:23px"><use href="#i-contact"/></svg>
+      </div>
+      <span style="position:absolute;right:-2px;bottom:-2px;width:19px;height:19px;border-radius:50%;background:#fff;display:grid;place-items:center">
+        <span style="width:15px;height:15px;border-radius:50%;background:#5667F5;display:grid;place-items:center;color:#fff">
+          <svg class="ic" style="width:9px;height:9px;stroke-width:2.6"><use href="#i-plus"/></svg>
+        </span>
+      </span>
+    </div>
+    <span class="name">My status</span>
+  </div>` + STORIES.map(s=>`
+  <div class="story-person" data-story="${s.seed}">
+    ${avatar(s.name, 52, s.img, {ring:!s.viewed})}
+    <span class="name">${s.name.split(' ')[0]}</span>
+  </div>`).join('');
+
+document.getElementById('statusGrid').innerHTML = STORIES.map(s=>`
+  <div class="story-card" data-story="${s.seed}" style="height:${s.h}px">
+    <img src="https://picsum.photos/seed/${s.seed}/400/560" onerror="this.remove()" alt="">
+    <div class="shade"></div>
+    ${!s.viewed?'<div class="ring"></div>':''}
+    <div class="play"><svg class="ic" style="width:12px;height:12px"><use href="#i-play"/></svg></div>
+    <div class="cap"><b>${s.cap}</b><span>@${s.handle.replace('@','')}</span></div>
+  </div>
+`).join('');
+
+/* ------------------------------------------------------------------ status viewer */
+const viewer = document.getElementById('viewer');
+document.getElementById('statusGrid').addEventListener('click', e=>{
+  const card = e.target.closest('[data-story]'); if(!card) return;
+  const s = STORIES.find(x=>x.seed===card.dataset.story);
+  document.getElementById('viewerImg').src = `https://picsum.photos/seed/${s.seed}/600/900`;
+  viewer.querySelector('.n').textContent = s.name;
+  viewer.classList.add('open');
+});
+document.getElementById('viewerClose').onclick = ()=>viewer.classList.remove('open');
+
+/* ------------------------------------------------------------------ chat interactions */
+const menu = document.getElementById('attachMenu');
+const plus = document.getElementById('plusBtn');
+plus.onclick = e=>{ e.stopPropagation(); menu.classList.toggle('hidden'); };
+
+const input = document.getElementById('msgInput');
+const sendBtn = document.getElementById('sendBtn');
+const chatBody = document.getElementById('chatBody');
+
+function refreshSend(){
+  const ready = input.value.trim().length>0;
+  sendBtn.classList.toggle('ready', ready);
+  sendBtn.innerHTML = ready
+    ? '<svg class="ic" style="width:17px;height:17px"><use href="#i-check"/></svg>'
+    : '<svg class="ic" style="width:18px;height:18px"><use href="#i-mic"/></svg>';
+}
+input.addEventListener('input', refreshSend);
+input.addEventListener('keydown', e=>{ if(e.key==='Enter') sendMsg(); });
+sendBtn.onclick = ()=> input.value.trim() ? sendMsg() : toast('Voice note recording…');
+
+function nowTime(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+}
+function sendMsg(){
+  const text = input.value.trim(); if(!text) return;
+  const el = document.createElement('div');
+  el.className = 'msg out';
+  el.innerHTML = `<div class="bubble">${text.replace(/</g,'&lt;')}<div class="meta">${nowTime()} <svg class="ic" style="width:12px;height:12px;stroke-width:2.4"><use href="#i-check2"/></svg></div></div>`;
+  chatBody.appendChild(el);
+  chatBody.scrollTop = chatBody.scrollHeight;
+  input.value = ''; refreshSend(); menu.classList.add('hidden');
+  setTimeout(()=>{
+    el.querySelector('.meta').innerHTML = `${nowTime()} <svg class="ic" style="width:12px;height:12px;stroke-width:2.4"><use href="#i-check2"/></svg>`;
+  }, 600);
+  setTimeout(()=>{
+    const reply = document.createElement('div');
+    reply.className='msg in';
+    reply.innerHTML = `<div class="bubble">Got it 👍 I'll check and get back to you.<div class="meta">${nowTime()}</div></div>`;
+    chatBody.appendChild(reply);
+    chatBody.scrollTop = chatBody.scrollHeight;
+  }, 1600);
+}
+document.querySelectorAll('.attach-row').forEach(row=>{
+  row.onclick = ()=>{
+    const kind = row.dataset.kind;
+    const label = {camera:'Camera',file:'Document',photo:'Photo & Video',location:'Location',contact:'Contact',poll:'Polling'}[kind];
+    menu.classList.add('hidden');
+    if(kind==='file'){
+      const el = document.createElement('div');
+      el.className='msg out';
+      el.innerHTML = `<div class="bubble"><div class="filecard" style="background:rgba(255,255,255,.15)">
+        <div class="fico" style="background:rgba(255,255,255,.2);color:#fff"><svg class="ic" style="width:18px;height:18px"><use href="#i-file"/></svg></div>
+        <div style="flex:1"><div class="fname">Mostate_Brief.pdf</div><div class="fsize">245 kb</div></div>
+        <div class="dl"><svg class="ic" style="width:14px;height:14px"><use href="#i-download"/></svg></div></div>
+        Sent from Bungram<div class="meta">${nowTime()} <svg class="ic" style="width:12px;height:12px;stroke-width:2.4"><use href="#i-check2"/></svg></div></div>`;
+      chatBody.appendChild(el); chatBody.scrollTop = chatBody.scrollHeight;
+    } else {
+      toast(label + ' — picker opens here');
+    }
+  };
+});
+document.addEventListener('click', e=>{
+  if(!menu.contains(e.target) && !plus.contains(e.target)) menu.classList.add('hidden');
+});
+chatBody.scrollTop = chatBody.scrollHeight;
+
+/* ------------------------------------------------------------------ phone A tabs */
+const views = document.querySelectorAll('#phoneA .view');
+const tabs  = document.querySelectorAll('#phoneA .tab');
+tabs.forEach(t=>{
+  t.onclick = ()=>{
+    tabs.forEach(x=>x.classList.toggle('active', x===t));
+    views.forEach(v=> v.style.display = (v.dataset.view===t.dataset.tab) ? 'flex':'none');
+    if(t.dataset.tab!=='message') renderSecondary(t.dataset.tab);
+  };
+});
+
+function renderSecondary(tab){
+  const el = document.querySelector(`#phoneA .view[data-view="${tab}"]`);
+  if(el.dataset.ready) return;
+  el.dataset.ready = '1';
+
+  if(tab==='status'){
+    el.innerHTML = `
+      <div class="status-head" style="padding-top:4px">
+        <button class="circle-btn ghost"><svg class="ic" style="width:21px;height:21px"><use href="#i-grid"/></svg></button>
+        <h1 class="title">Status</h1>
+        <button class="circle-btn"><svg class="ic" style="width:20px;height:20px"><use href="#i-add"/></svg></button>
+      </div>
+      <div class="search-row" style="padding:4px 20px 2px"><div class="search">
+        <svg class="ic" style="width:18px;height:18px"><use href="#i-search"/></svg><input placeholder="Search..."></div></div>
+      <div class="status-rail">${document.getElementById('statusRail').innerHTML}</div>
+      <div class="status-grid">${document.getElementById('statusGrid').innerHTML}</div>`;
+  }
+
+  if(tab==='call'){
+    const calls = [
+      {n:'Abdurrahman Client', img:12, s:'Today, 12:23 PM · 12:22', type:'video', dir:'in'},
+      {n:'Christ Client', img:51, s:'Today, 7:36 AM · Missed', type:'audio', dir:'missed'},
+      {n:'Johan Fauzan', img:13, s:'Yesterday · 2:08', type:'audio', dir:'out'},
+      {n:'+92 287 918273', img:null, s:'29/03/2023 · 1:05', type:'video', dir:'in'}
+    ];
+    el.innerHTML = `
+      <div class="list-head"><h1 class="title">Call</h1>
+        <button class="circle-btn"><svg class="ic" style="width:19px;height:19px"><use href="#i-phone"/></svg></button></div>
+      <div class="search-row"><div class="search">
+        <svg class="ic" style="width:18px;height:18px"><use href="#i-search"/></svg><input placeholder="Search..."></div></div>
+      <div style="flex:1;overflow:auto;padding-bottom:96px">
+        ${calls.map(c=>`
+          <div class="call-row">
+            ${avatar(c.n, 48, c.img)}
+            <div style="flex:1">
+              <div class="n">${c.n}</div>
+              <div class="s" style="color:${c.dir==='missed'?'#FF4D4F':'#9AA1B2'}">
+                <svg class="ic" style="width:12px;height:12px"><use href="#${c.dir==='in'?'i-call-in':c.dir==='out'?'i-call-out':'i-call-in'}"/></svg>${c.s}
+              </div>
+            </div>
+            <div class="circle-btn" style="background:${c.type==='video'?'#EDEFFF':'transparent'};color:${c.type==='video'?'#5667F5':'#BFC5D2'}">
+              <svg class="ic" style="width:18px;height:18px"><use href="#${c.type==='video'?'i-video':'i-phone'}"/></svg>
+            </div>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  if(tab==='profile'){
+    el.innerHTML = `
+      <div class="profile">
+        <h1 class="title" style="padding:10px 22px 12px">Profile</h1>
+        <div class="hero">
+          ${avatar('Fitria Rahmani', 96, null, {})}
+          <div class="n">Fitria Rahmani <svg class="ic verified" style="width:14px;height:14px"><use href="#i-verified"/></svg></div>
+          <div class="p">+62 812 3456 7890</div>
+          <div class="u">@fitri</div>
+          <div class="p" style="margin-top:4px">Product designer · Jakarta</div>
+        </div>
+        <div class="settings">
+          <div class="set-row"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-contact"/></svg></span>
+            <span class="txt"><b>Account</b><span>Phone, username, about</span></span>
+            <svg class="ic" style="width:15px;height:15px;color:#BFC5D2"><use href="#i-chev-right"/></svg></div>
+          <div class="set-row"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-poll"/></svg></span>
+            <span class="txt"><b>Privacy</b><span>Blocked contacts, last seen</span></span>
+            <svg class="ic" style="width:15px;height:15px;color:#BFC5D2"><use href="#i-chev-right"/></svg></div>
+          <div class="set-row"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-mic"/></svg></span>
+            <span class="txt"><b>Notifications</b><span>Message tones, badges</span></span>
+            <svg class="ic" style="width:15px;height:15px;color:#BFC5D2"><use href="#i-chev-right"/></svg></div>
+          <div class="set-row"><span class="box"><svg class="ic" style="width:16px;height:16px"><use href="#i-file"/></svg></span>
+            <span class="txt"><b>Storage &amp; data</b><span>Auto-download, cache</span></span>
+            <svg class="ic" style="width:15px;height:15px;color:#BFC5D2"><use href="#i-chev-right"/></svg></div>
+        </div>
+        <div class="foot">Bungram 0.1.0 · end-to-end encrypted</div>
+      </div>`;
+  }
+}
+
+/* ------------------------------------------------------------------ misc */
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 1900);
+}
+document.getElementById('fabNew').onclick = ()=>toast('New chat · group · channel');
+document.querySelectorAll('#phoneA .chat-row').forEach(r=>{
+  r.onclick = ()=>toast('Opening ' + CHATS[+r.dataset.chat].name);
+});
+document.querySelectorAll('#phoneC .tab').forEach(t=>{
+  if(t.dataset.tab!=='status') t.onclick = ()=>toast('Tab: ' + t.dataset.tab);
+});
+document.querySelectorAll('#phoneC .fab').forEach(b=> b.onclick = ()=>toast('New status'));
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Bungram</string>
+    <string name="tab_message">Message</string>
+    <string name="tab_status">Status</string>
+    <string name="tab_call">Call</string>
+    <string name="tab_profile">Profile</string>
+    <string name="search_hint">Search...</string>
+    <string name="type_hint">Type Here...</string>
+    <string name="online">Online</string>
+</resources>
