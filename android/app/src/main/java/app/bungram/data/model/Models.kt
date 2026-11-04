@@ -55,6 +55,9 @@ enum class DeliveryState { QUEUED, SENT, DELIVERED, READ, FAILED }
 @Serializable
 data class Attachment(
     val url: String? = null,
+    val thumbUrl: String? = null,
+    val mediaId: String? = null,
+    /** Local `content://` or `file://` URI while the bytes are still on the device. */
     val localPath: String? = null,
     val mimeType: String = "application/octet-stream",
     val fileName: String? = null,
@@ -62,11 +65,19 @@ data class Attachment(
     val width: Int = 0,
     val height: Int = 0,
     val durationMs: Long = 0L,
+    /** Server-computed average colour, painted behind the bubble until the image decodes. */
+    val colorHint: String? = null,
     val blurHash: String? = null,
     /** AES-256-GCM key wrapped for every recipient device (E2EE media). */
     val mediaKey: String? = null,
     val sha256: String? = null,
-)
+    /** 0f..1f while uploading, -1f when idle. Transient: never persisted. */
+    val uploadProgress: Float = -1f,
+) {
+    val isUploading: Boolean get() = uploadProgress >= 0f
+    val isLocal: Boolean get() = url.isNullOrBlank() && !localPath.isNullOrBlank()
+    val bestPreview: String? get() = thumbUrl ?: url ?: localPath
+}
 
 @Serializable
 data class Message(

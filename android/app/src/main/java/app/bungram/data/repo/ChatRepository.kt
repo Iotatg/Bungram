@@ -40,8 +40,28 @@ interface ChatRepository {
         attachment: Attachment? = null,
     )
 
+    /**
+     * Pick → compress → upload → send. [uri] is a `content://` or `file://` string so the domain
+     * layer stays free of Android framework types.
+     */
+    suspend fun sendMedia(
+        chatId: String,
+        uri: String,
+        kind: MessageKind,
+        durationMs: Long = 0L,
+    )
+
     fun markRead(chatId: String)
     fun markStoryViewed(storyId: String)
+
+    /** True while any other member of [chatId] is typing. Drives the "typing…" subtitle. */
+    fun typing(chatId: String): StateFlow<Boolean>
+
+    /** Inbound typing signal from the socket. */
+    fun onTyping(chatId: String, userId: String, typing: Boolean)
+
+    /** Outbound typing signal. Fire-and-forget; a dropped frame is not an error. */
+    suspend fun sendTyping(chatId: String, typing: Boolean)
 }
 
 class DemoChatRepository : ChatRepository {
@@ -119,6 +139,25 @@ class DemoChatRepository : ChatRepository {
         messageStore[chatId]?.update { list -> list.map { if (it.id == messageId) block(it) else it } }
     }
 
+    /** Demo mode has no server, so the picked file is shown straight from its local URI. */
+    override suspend fun sendMedia(chatId: String, uri: String, kind: MessageKind, durationMs: Long) {
+        send(
+            chatId = chatId,
+            text = "",
+            kind = kind,
+            attachment = Attachment(
+                localPath = uri,
+                mimeType = when (kind) {
+                    MessageKind.IMAGE -> "image/*"
+                    MessageKind.VIDEO -> "video/*"
+                    MessageKind.VOICE -> "audio/mp4"
+                    else -> "application/octet-stream"
+                },
+                durationMs = durationMs,
+            ),
+        )
+    }
+
     override fun markRead(chatId: String) {
         _chats.update { list -> list.map { if (it.id == chatId) it.copy(unreadCount = 0) else it } }
     }
@@ -130,4 +169,16 @@ class DemoChatRepository : ChatRepository {
             }
         }
     }
+
+    private val typingFlows = mutableMapOf<String, MutableStateFlow<Boolean>>()
+
+    override fun typing(chatId: String): StateFlow<Boolean> =
+        typingFlows.getOrPut(chatId) { MutableStateFlow(false) }.asStateFlow()
+
+    override fun onTyping(chatId: String, userId: String, typing: Boolean) {
+        if (userId == DemoData.ME_ID) return
+        typingFlows.getOrPut(chatId) { MutableStateFlow(false) }.value = typing
+    }
+
+    override suspend fun sendTyping(chatId: String, typing: Boolean) = Unit
 }

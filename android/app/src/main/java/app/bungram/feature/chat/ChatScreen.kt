@@ -1,6 +1,16 @@
 package app.bungram.feature.chat
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -32,20 +42,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.ChevronLeft
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContactPage
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.PhotoCamera
-import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Poll
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material.icons.rounded.Videocam
-import androidx.compose.material.icons.rounded.Call
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -53,26 +61,34 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.bungram.AppGraph
 import app.bungram.core.design.BungramAvatar
 import app.bungram.core.design.BungramBlue
 import app.bungram.core.design.BungramBlueGhost
 import app.bungram.core.design.Canvas as CanvasColor
 import app.bungram.core.design.ChatCanvas
 import app.bungram.core.design.ChatPatternDot
-import app.bungram.core.design.CircleIconButton
 import app.bungram.core.design.DeliveryTicks
-import app.bungram.core.design.Divider
+import app.bungram.core.design.Danger
 import app.bungram.core.design.SurfaceMuted
 import app.bungram.core.design.TextPrimary
 import app.bungram.core.design.TextSecondary
@@ -81,6 +97,8 @@ import app.bungram.core.util.TimeFormat
 import app.bungram.data.model.DeliveryState
 import app.bungram.data.model.Message
 import app.bungram.data.model.MessageKind
+import java.io.File
+import java.util.UUID
 
 /**
  * Screen 2 of the reference: 1:1 chat.
@@ -94,20 +112,72 @@ fun ChatScreen(
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onToggleAttachment: () -> Unit,
-    onPickAttachment: (MessageKind) -> Unit,
-    onToggleRecording: () -> Unit,
+    onSendMedia: (uri: String, kind: MessageKind, durationMs: Long) -> Unit,
+    onStartRecording: () -> Boolean,
+    onStopRecording: () -> Unit,
+    onCancelRecording: () -> Unit,
     onVideoCall: () -> Unit,
     onVoiceCall: () -> Unit,
     onClearReply: () -> Unit,
+    onDismissError: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
+    val context = LocalContext.current
+    var viewer by remember { mutableStateOf<Message?>(null) }
+    var cameraTarget by remember { mutableStateOf<Uri?>(null) }
+
+    val playingId by AppGraph.audio.playingId.collectAsStateWithLifecycle()
+    val playbackProgress by AppGraph.audio.progress.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.messages.size) {
         if (state.messages.isNotEmpty()) {
             runCatching { listState.animateScrollToItem(state.messages.size) }
         }
     }
+
+    /* ---------------------------------------------------------------------------- pickers */
+
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val isVideo = context.contentResolver.getType(uri)?.startsWith("video") == true
+        onSendMedia(uri.toString(), if (isVideo) MessageKind.VIDEO else MessageKind.IMAGE, 0L)
+    }
+
+    val pickDocument = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        onSendMedia(uri.toString(), MessageKind.FILE, 0L)
+    }
+
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
+        val uri = cameraTarget
+        cameraTarget = null
+        if (ok && uri != null) onSendMedia(uri.toString(), MessageKind.IMAGE, 0L)
+    }
+
+    val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) onStartRecording()
+    }
+
+    fun openCamera() {
+        val dir = File(context.cacheDir, "camera").apply { mkdirs() }
+        val file = File(dir, "cap_${UUID.randomUUID()}.jpg")
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", file)
+        cameraTarget = uri
+        takePicture.launch(uri)
+    }
+
+    fun toggleMic() {
+        if (state.isRecording) {
+            onStopRecording()
+            return
+        }
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (granted) onStartRecording() else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+
+    /* ------------------------------------------------------------------------------- body */
 
     Column(
         modifier
@@ -117,8 +187,15 @@ fun ChatScreen(
     ) {
         ChatHeader(
             name = state.chat?.title ?: "Chat",
+            avatarUrl = state.chat?.avatarUrl,
             online = state.peer?.presence == app.bungram.data.model.Presence.ONLINE,
-            subtitle = if (state.peer?.presence == app.bungram.data.model.Presence.ONLINE) "Online" else "last seen recently",
+            subtitle = when {
+                state.isRecording -> "recording…"
+                state.isPeerTyping -> "typing…"
+                state.peer?.presence == app.bungram.data.model.Presence.ONLINE -> "Online"
+                else -> "last seen recently"
+            },
+            subtitleAccent = state.isPeerTyping,
             onBack = onBack,
             onVideoCall = onVideoCall,
             onVoiceCall = onVoiceCall,
@@ -135,11 +212,7 @@ fun ChatScreen(
                 if (state.messages.isNotEmpty()) {
                     item(key = "date") {
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            Surface(
-                                shape = RoundedCornerShape(50),
-                                color = Color.White,
-                                shadowElevation = 1.dp,
-                            ) {
+                            Surface(shape = RoundedCornerShape(50), color = Color.White, shadowElevation = 1.dp) {
                                 Text(
                                     TimeFormat.dayLabel(state.messages.first().createdAtEpochMs),
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
@@ -151,7 +224,13 @@ fun ChatScreen(
                     }
                 }
                 items(state.messages, key = { it.id }) { message ->
-                    MessageBubble(message)
+                    MessageBubble(
+                        message = message,
+                        playing = playingId == message.id,
+                        playbackProgress = playbackProgress,
+                        onOpenMedia = { viewer = message },
+                        onToggleVoice = { AppGraph.audio.toggle(message.id, message.attachment!!, AppGraph.tokens.access) },
+                    )
                 }
             }
         }
@@ -165,25 +244,54 @@ fun ChatScreen(
             enter = slideInVertically { it / 2 } + fadeIn(),
             exit = slideOutVertically { it / 2 } + fadeOut(),
         ) {
-            AttachmentMenu(onPick = onPickAttachment)
+            AttachmentMenu(
+                onCamera = ::openCamera,
+                onGallery = { pickMedia.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                onDocument = { pickDocument.launch(arrayOf("*/*")) },
+            )
         }
 
-        Composer(
-            draft = state.draft,
-            onDraftChange = onDraftChange,
-            onSend = onSend,
-            onToggleAttachment = onToggleAttachment,
-            onToggleRecording = onToggleRecording,
-            isRecording = state.isRecording,
-        )
+        if (state.isRecording) {
+            RecordingBar(
+                elapsedMs = state.recordingMs,
+                onCancel = onCancelRecording,
+                onStop = onStopRecording,
+            )
+        } else {
+            Composer(
+                draft = state.draft,
+                onDraftChange = onDraftChange,
+                onSend = onSend,
+                onToggleAttachment = onToggleAttachment,
+                onToggleRecording = ::toggleMic,
+                isRecording = false,
+                busy = state.isSendingMedia,
+            )
+        }
+
+        if (state.error != null) {
+            ErrorBar(state.error, onDismissError)
+        }
+    }
+
+    val open = viewer
+    if (open != null) {
+        val attachment = open.attachment
+        when {
+            attachment == null -> viewer = null
+            open.kind == MessageKind.VIDEO -> VideoViewer(attachment) { viewer = null }
+            else -> ImageViewer(attachment) { viewer = null }
+        }
     }
 }
 
 @Composable
 private fun ChatHeader(
     name: String,
+    avatarUrl: String?,
     online: Boolean,
     subtitle: String,
+    subtitleAccent: Boolean = false,
     onBack: () -> Unit,
     onVideoCall: () -> Unit,
     onVoiceCall: () -> Unit,
@@ -199,7 +307,7 @@ private fun ChatHeader(
         IconButton(onClick = onBack) {
             Icon(Icons.Rounded.ChevronLeft, "Back", Modifier.size(26.dp), tint = TextPrimary)
         }
-        BungramAvatar(name = name, url = null, size = 40.dp, online = online)
+        BungramAvatar(name = name, url = avatarUrl, size = 40.dp, online = online)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
@@ -208,7 +316,12 @@ private fun ChatHeader(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            Text(subtitle, fontSize = 10.sp, color = TextSecondary)
+            Text(
+                subtitle,
+                fontSize = 10.sp,
+                color = if (subtitleAccent) BungramBlue else TextSecondary,
+                fontWeight = if (subtitleAccent) FontWeight.Medium else FontWeight.Normal,
+            )
         }
         IconButton(onClick = onVideoCall) {
             Icon(Icons.Rounded.Videocam, "Video call", Modifier.size(22.dp), tint = TextPrimary)
@@ -239,7 +352,13 @@ private fun ChatPattern(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun MessageBubble(message: Message) {
+private fun MessageBubble(
+    message: Message,
+    playing: Boolean,
+    playbackProgress: Float,
+    onOpenMedia: () -> Unit,
+    onToggleVoice: () -> Unit,
+) {
     val outgoing = message.isOutgoing
     val shape = RoundedCornerShape(
         topStart = 18.dp,
@@ -249,6 +368,10 @@ private fun MessageBubble(message: Message) {
     )
     val textColor = if (outgoing) Color.White else TextPrimary
     val metaColor = if (outgoing) Color.White.copy(alpha = 0.72f) else TextTertiary
+
+    // A photo or a video is edge-to-edge inside its bubble; text and files keep the padding.
+    val media = message.kind == MessageKind.IMAGE || message.kind == MessageKind.VIDEO
+    val innerPadding = if (media) 4.dp else 13.dp
 
     Column(
         Modifier.fillMaxWidth(),
@@ -260,23 +383,33 @@ private fun MessageBubble(message: Message) {
             shadowElevation = if (outgoing) 0.dp else 1.5.dp,
             modifier = Modifier.widthIn(max = 300.dp),
         ) {
-            Column(Modifier.padding(horizontal = 13.dp, vertical = 9.dp)) {
-                if (message.kind == MessageKind.FILE) {
-                    FileCard(message, outgoing)
-                    Spacer(Modifier.height(8.dp))
+            Column(Modifier.padding(horizontal = innerPadding, vertical = innerPadding)) {
+                when (message.kind) {
+                    MessageKind.IMAGE -> ImageBubble(message, outgoing, onOpenMedia)
+                    MessageKind.VIDEO -> VideoBubble(message, outgoing, onOpenMedia)
+                    MessageKind.VOICE -> VoiceBubble(message, outgoing, playing, playbackProgress, onToggleVoice)
+                    MessageKind.FILE -> FileBubble(message, outgoing)
+                    else -> if (message.attachment != null) MediaMissing(message)
                 }
+
                 if (message.text.isNotEmpty()) {
                     Text(
                         message.text,
+                        modifier = Modifier.padding(
+                            start = if (media) 9.dp else 0.dp,
+                            end = if (media) 9.dp else 0.dp,
+                            top = if (media) 6.dp else 0.dp,
+                        ),
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
                         color = textColor,
                     )
                 }
+
                 Row(
                     Modifier
                         .align(Alignment.End)
-                        .padding(top = 4.dp),
+                        .padding(top = 4.dp, end = if (media) 6.dp else 0.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(TimeFormat.messageTime(message.createdAtEpochMs), fontSize = 8.5.sp, color = metaColor)
@@ -287,63 +420,8 @@ private fun MessageBubble(message: Message) {
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun FileCard(message: Message, outgoing: Boolean) {
-    val attachment = message.attachment
-    Row(
-        Modifier
-            .width(238.dp)
-            .background(
-                if (outgoing) Color.White.copy(alpha = 0.14f) else SurfaceMuted,
-                RoundedCornerShape(12.dp),
-            )
-            .padding(9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(34.dp)
-                .background(if (outgoing) Color.White.copy(alpha = 0.2f) else BungramBlueGhost, RoundedCornerShape(9.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                if (attachment?.mimeType?.contains("pdf") == true) Icons.Rounded.PictureAsPdf else Icons.Rounded.InsertDriveFile,
-                null,
-                Modifier.size(18.dp),
-                tint = if (outgoing) Color.White else BungramBlue,
-            )
-        }
-        Spacer(Modifier.width(9.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                attachment?.fileName ?: "File",
-                fontSize = 11.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (outgoing) Color.White else TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                TimeFormat.fileSize(attachment?.sizeBytes ?: 0L),
-                fontSize = 9.sp,
-                color = if (outgoing) Color.White.copy(alpha = 0.7f) else TextSecondary,
-            )
-        }
-        Box(
-            Modifier
-                .size(24.dp)
-                .background(if (outgoing) Color.White.copy(alpha = 0.22f) else Color.White, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                Icons.Rounded.Download,
-                "Download",
-                Modifier.size(14.dp),
-                tint = if (outgoing) Color.White else TextPrimary,
-            )
+        if (message.delivery == DeliveryState.FAILED) {
+            Text("Not sent · tap to retry", fontSize = 9.sp, color = Danger, modifier = Modifier.padding(top = 2.dp))
         }
     }
 }
@@ -357,16 +435,64 @@ private fun ReplyPreview(text: String, onClear: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .width(3.dp)
-                .height(28.dp)
-                .background(BungramBlue, RoundedCornerShape(2.dp))
-        )
+        Box(Modifier.width(3.dp).height(28.dp).background(BungramBlue, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(8.dp))
         Text(text, fontSize = 11.sp, color = TextSecondary, maxLines = 1, modifier = Modifier.weight(1f))
         IconButton(onClick = onClear, modifier = Modifier.size(24.dp)) {
             Icon(Icons.Rounded.Close, "Cancel reply", Modifier.size(15.dp), tint = TextSecondary)
+        }
+    }
+}
+
+@Composable
+private fun RecordingBar(elapsedMs: Long, onCancel: () -> Unit, onStop: () -> Unit) {
+    val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "pulseAlpha",
+    )
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .navigationBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(10.dp).background(Danger.copy(alpha = pulse), CircleShape))
+        Spacer(Modifier.width(10.dp))
+        Text(
+            TimeFormat.durationMs(elapsedMs),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = TextPrimary,
+        )
+        Spacer(Modifier.width(10.dp))
+        Text("Recording voice note", fontSize = 11.sp, color = TextSecondary, modifier = Modifier.weight(1f))
+        Text("Cancel", fontSize = 11.5.sp, color = TextSecondary, modifier = Modifier.clickable(onClick = onCancel).padding(8.dp))
+        Spacer(Modifier.width(6.dp))
+        Box(
+            Modifier.size(40.dp).background(BungramBlue, CircleShape).clickable(onClick = onStop),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.Send, "Send voice note", Modifier.size(18.dp), tint = Color.White)
+        }
+    }
+}
+
+@Composable
+private fun ErrorBar(message: String, onDismiss: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Danger.copy(alpha = 0.08f))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(message, fontSize = 11.sp, color = Danger, modifier = Modifier.weight(1f))
+        IconButton(onClick = onDismiss, modifier = Modifier.size(22.dp)) {
+            Icon(Icons.Rounded.Close, "Dismiss", Modifier.size(14.dp), tint = Danger)
         }
     }
 }
@@ -379,6 +505,7 @@ private fun Composer(
     onToggleAttachment: () -> Unit,
     onToggleRecording: () -> Unit,
     isRecording: Boolean,
+    busy: Boolean,
 ) {
     Row(
         Modifier
@@ -408,7 +535,7 @@ private fun Composer(
         ) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                 if (draft.isEmpty()) {
-                    Text("Type Here...", fontSize = 12.5.sp, color = TextTertiary)
+                    Text(if (busy) "Sending…" else "Type Here...", fontSize = 12.5.sp, color = TextTertiary)
                 }
                 BasicTextField(
                     value = draft,
@@ -430,7 +557,7 @@ private fun Composer(
                     if (draft.isBlank()) Icons.Rounded.Mic else Icons.Rounded.Send,
                     contentDescription = if (draft.isBlank()) "Record voice note" else "Send",
                     modifier = Modifier.size(18.dp),
-                    tint = if (isRecording) app.bungram.core.design.Danger else if (draft.isBlank()) TextSecondary else BungramBlue,
+                    tint = if (isRecording) Danger else if (draft.isBlank()) TextSecondary else BungramBlue,
                 )
             }
         }
@@ -438,20 +565,30 @@ private fun Composer(
 }
 
 /* -------------------------------------------------------------------------------------------------
- * Attachment menu — floating white card with the six actions from the reference.
+ * Attachment menu — the six actions from the reference. The first three are live; the rest are
+ * visibly marked so nothing looks broken.
  * ----------------------------------------------------------------------------------------------- */
 
-private data class AttachmentAction(val icon: ImageVector, val label: String, val kind: MessageKind?)
+private data class AttachmentAction(
+    val icon: ImageVector,
+    val label: String,
+    val enabled: Boolean,
+    val onClick: () -> Unit,
+)
 
 @Composable
-private fun AttachmentMenu(onPick: (MessageKind) -> Unit) {
+private fun AttachmentMenu(
+    onCamera: () -> Unit,
+    onGallery: () -> Unit,
+    onDocument: () -> Unit,
+) {
     val actions = listOf(
-        AttachmentAction(Icons.Rounded.CameraAlt, "Camera", MessageKind.IMAGE),
-        AttachmentAction(Icons.Rounded.InsertDriveFile, "Document", MessageKind.FILE),
-        AttachmentAction(Icons.Rounded.PhotoCamera, "Photo & Video", MessageKind.IMAGE),
-        AttachmentAction(Icons.Rounded.LocationOn, "Location", MessageKind.LOCATION),
-        AttachmentAction(Icons.Rounded.ContactPage, "Contact", MessageKind.CONTACT),
-        AttachmentAction(Icons.Rounded.Poll, "Polling", MessageKind.POLL),
+        AttachmentAction(Icons.Rounded.CameraAlt, "Camera", true, onCamera),
+        AttachmentAction(Icons.Rounded.InsertDriveFile, "Document", true, onDocument),
+        AttachmentAction(Icons.Rounded.PhotoCamera, "Photo & Video", true, onGallery),
+        AttachmentAction(Icons.Rounded.LocationOn, "Location · soon", false, {}),
+        AttachmentAction(Icons.Rounded.ContactPage, "Contact · soon", false, {}),
+        AttachmentAction(Icons.Rounded.Poll, "Polling · soon", false, {}),
     )
     Surface(
         modifier = Modifier
@@ -466,20 +603,29 @@ private fun AttachmentMenu(onPick: (MessageKind) -> Unit) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clickable { onPick(action.kind ?: MessageKind.TEXT) }
+                        .clickable(enabled = action.enabled, onClick = action.onClick)
                         .padding(horizontal = 14.dp, vertical = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
                         Modifier
                             .size(30.dp)
-                            .background(SurfaceMuted, RoundedCornerShape(9.dp)),
+                            .background(if (action.enabled) SurfaceMuted else SurfaceMuted.copy(alpha = 0.5f), RoundedCornerShape(9.dp)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(action.icon, null, Modifier.size(16.dp), tint = TextPrimary)
+                        Icon(
+                            action.icon,
+                            null,
+                            Modifier.size(16.dp),
+                            tint = if (action.enabled) TextPrimary else TextTertiary,
+                        )
                     }
                     Spacer(Modifier.width(12.dp))
-                    Text(action.label, fontSize = 12.5.sp, color = TextPrimary)
+                    Text(
+                        action.label,
+                        fontSize = 12.5.sp,
+                        color = if (action.enabled) TextPrimary else TextTertiary,
+                    )
                 }
             }
         }

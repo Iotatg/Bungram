@@ -128,10 +128,24 @@ async def main():
     assert receipt and receipt["messageId"] == sent["id"], receipt
     print(f"   B received receipt: {receipt}")
     ok += 1
+
+    print("== 5. typing indicator ==")
+    call("POST", f"/v1/chats/{chat1['id']}/typing", {"chatId": chat1["id"], "userId": b["userId"], "typing": True}, b["accessToken"])
+    typing_evt = await wait_for(a_ws, "typing")
+    assert typing_evt and typing_evt["typing"] is True, typing_evt
+    assert typing_evt["userId"] == b["userId"], typing_evt
+    print(f"   A saw typing:true from {typing_evt['userId'][:8]}…")
+
+    call("POST", f"/v1/chats/{chat1['id']}/typing", {"chatId": chat1["id"], "userId": b["userId"], "typing": False}, b["accessToken"])
+    stopped = await wait_for(a_ws, "typing")
+    assert stopped and stopped["typing"] is False, stopped
+    print("   A saw typing:false (indicator clears)")
+    ok += 1
+
     await a_ws.close()
     await b_ws.close()
 
-    print("== 5. idempotent retry ==")
+    print("== 6. idempotent retry ==")
     again = call(
         "POST",
         "/v1/messages",
@@ -145,14 +159,14 @@ async def main():
     print(f"   retry returned the same id, still 1 message")
     ok += 1
 
-    print("== 6. cursor monotonic ==")
+    print("== 7. cursor monotonic ==")
     d2 = call("GET", f"/v1/sync?cursor={cursor}", token=a["accessToken"])["data"]
     assert not [m for m in d2["messages"] if m["chatId"] == chat1["id"]], "cursor replayed old messages"
     assert int(d2["nextCursor"]) >= int(cursor), "cursor went backwards"
     print(f"   nothing new, cursor {cursor} -> {d2['nextCursor']}")
     ok += 1
 
-    print(f"\nALL {ok}/6 CHECKS PASSED")
+    print(f"\nALL {ok}/7 CHECKS PASSED")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,12 @@
 package app.bungram
 
 import android.app.Application
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import app.bungram.data.local.BungramDb
+import app.bungram.data.media.AudioPlayer
+import app.bungram.data.media.MediaUploader
+import app.bungram.data.media.VoiceRecorder
 import app.bungram.data.remote.BungramApi
 import app.bungram.data.remote.ServerSettings
 import app.bungram.data.remote.TokenStore
@@ -14,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
 
 sealed interface SessionState {
     data object Loading : SessionState
@@ -51,6 +57,36 @@ object AppGraph {
     lateinit var sync: SyncEngine
         private set
 
+    lateinit var uploader: MediaUploader
+        private set
+
+    lateinit var recorder: VoiceRecorder
+        private set
+
+    lateinit var audio: AudioPlayer
+        private set
+
+    /**
+     * Coil's HTTP stack. Every media request needs the bearer token, and images must not carry it
+     * in the URL — a URL ends up in logs, screenshots and referrers.
+     */
+    private val mediaHttp: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val token = runCatching { tokens.access }.getOrNull()
+                val request = if (token.isNullOrBlank()) chain.request()
+                else chain.request().newBuilder().header("Authorization", "Bearer $token").build()
+                chain.proceed(request)
+            }
+            .build()
+    }
+
+    fun imageLoader(context: android.content.Context): ImageLoader =
+        ImageLoader.Builder(context)
+            .okHttpClient(mediaHttp)
+            .crossfade(true)
+            .build()
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _session = MutableStateFlow<SessionState>(SessionState.Loading)
@@ -67,7 +103,10 @@ object AppGraph {
             tokens = TokenStore(app)
             api = BungramApi(app, tokens, settings)
             db = BungramDb(app)
-            repository = RemoteChatRepository(db, api)
+            uploader = MediaUploader(app, tokens, settings)
+            recorder = VoiceRecorder(app)
+            audio = AudioPlayer(app)
+            repository = RemoteChatRepository(db, api, uploader)
             sync = SyncEngine(repository, api, settings)
 
             if (tokens.access != null) {
@@ -100,11 +139,16 @@ object AppGraph {
 
     /** True when the app has a token but the socket has not come up yet — drives the "connecting" chip. */
     fun isAuthenticated(): Boolean = tokens.access != null
+
+    /** The signed-in account as the server described it, or null before the first sync lands. */
+    fun me(): app.bungram.data.model.User? = tokens.userId?.let(repository::user)
 }
 
-class BungramApp : Application() {
+class BungramApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         AppGraph.init(this)
     }
+
+    override fun newImageLoader(): ImageLoader = AppGraph.imageLoader(this)
 }

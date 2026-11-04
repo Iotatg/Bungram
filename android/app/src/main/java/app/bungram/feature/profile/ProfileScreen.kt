@@ -55,6 +55,7 @@ fun ProfileScreen(
     about: String,
     bottomPadding: Dp,
     onLogout: () -> Unit,
+    avatarUrl: String? = null,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -75,26 +76,30 @@ fun ProfileScreen(
             Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            BungramAvatar(name = name, url = null, size = 96.dp)
+            BungramAvatar(name = name, url = avatarUrl, size = 96.dp)
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(name, style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.width(5.dp))
                 Icon(Icons.Rounded.Verified, null, Modifier.size(15.dp), tint = BungramBlue)
             }
-            Text("+$phone", fontSize = 12.sp, color = TextSecondary)
+            if (phone.isNotBlank()) Text("+$phone", fontSize = 12.sp, color = TextSecondary)
             Spacer(Modifier.height(6.dp))
-            Surface(shape = RoundedCornerShape(50), color = BungramBlueGhost) {
-                Text(
-                    "@$username",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    fontSize = 10.5.sp,
-                    color = BungramBlue,
-                    fontWeight = FontWeight.Medium,
-                )
+            if (username.isNotBlank()) {
+                Surface(shape = RoundedCornerShape(50), color = BungramBlueGhost) {
+                    Text(
+                        "@$username",
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        fontSize = 10.5.sp,
+                        color = BungramBlue,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             }
-            Spacer(Modifier.height(8.dp))
-            Text(about, fontSize = 11.5.sp, color = TextSecondary)
+            if (about.isNotBlank()) {
+                Spacer(Modifier.height(8.dp))
+                Text(about, fontSize = 11.5.sp, color = TextSecondary)
+            }
         }
 
         Spacer(Modifier.height(22.dp))

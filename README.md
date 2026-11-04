@@ -19,30 +19,34 @@ Bungram/
 │       ├── core/nav/        NavHost + routes
 │       ├── feature/         messages · chat · status · calls · profile · home
 │       ├── data/            models · SQLite cache · outbox · REST client · secure token store
+│       ├── data/media/      uploader · voice recorder · audio player · URL resolver
 │       ├── crypto/          X25519 · X3DH · Double Ratchet · Sender Keys · AES-GCM
 │       ├── sync/            WebSocket + cursor sync + backoff
 │       └── service/         SyncService (foreground) · CallService · BootReceiver
-├── server/                  Ktor 3 backend (auth, chats, messages, sync, status, calls, WS)
-├── artifacts/               bungram-0.2.0-p1-debug.apk (built here)
-├── tools/e2e_two_devices.py two-device protocol test (6 checks, no emulator needed)
+├── server/                  Ktor 3 backend (auth, chats, messages, sync, media, WS)
+│   └── src/main/kotlin/app/bungram/server/
+│       ├── media/           content-addressed blob store · image tools · URL signer
+│       ├── routes/          REST + WebSocket + media routes
+│       └── store/           in-memory store (Postgres in phase 8)
+├── artifacts/               bungram-0.3.0-debug.apk (built here)
+├── tools/                   e2e_two_devices.py (7 checks) · e2e_media.py (25 checks)
 ├── preview/index.html       1:1 interactive UI reference (open in a browser)
 └── docs/                    feature map · 36 Q&A · architecture · REA workflow · deep dive
+                             · 10-phase roadmap · per-phase build reports (Hindi)
 ```
 
 ## Verified in this environment
 
 | Check | Result |
 |---|---|
-| `android: gradle :app:assembleDebug` | ✅ BUILD SUCCESSFUL — `artifacts/bungram-0.2.0-p1-debug.apk` (27 MB, `app.bungram.debug` 0.2.0, minSdk 26, targetSdk 35) |
+| `android: gradle :app:assembleDebug` | ✅ BUILD SUCCESSFUL — `artifacts/bungram-0.3.0-debug.apk` (28 MB, `app.bungram.debug` 0.3.0, minSdk 26, targetSdk 35) |
 | `server: gradle build` | ✅ BUILD SUCCESSFUL (Kotlin 2.0.21 / Ktor 3.0.1 / JDK 17 target) |
 | Server boots on :8080 | ✅ `{"ok":true,"data":{"status":"ok",...}}` |
-| OTP → JWT login | ✅ `Fitria Rahmani`, token issued |
-| `GET /v1/chats` | ✅ new account auto-provisioned with the `Bungram` service chat |
-| `POST /v1/messages` | ✅ message stored, fanned out over WS |
-| `GET /v1/sync` | ✅ chats + users + messages + monotonic `seq` cursor |
-| `GET /v1/status` | ✅ 2 story feeds |
-| `tools/e2e_two_devices.py` | ✅ **6/6 checks** — login, lookup, chat, WS delivery, receipt, idempotent retry, cursor |
+| OTP → JWT login | ✅ token issued, profile synced |
+| `tools/e2e_two_devices.py` | ✅ **7/7 checks** — login, lookup, chat, WS delivery, receipt, typing, idempotent retry, cursor |
+| `tools/e2e_media.py` | ✅ **25/25 checks** — upload, sniff, thumbnail, dedupe, quota, range, ETag, ACL, share link, delete |
 | App ↔ server wiring (P1) | ✅ login gate, local SQLite cache, durable outbox, delta sync, read receipts |
+| Media pipeline (P2) | ✅ pick → upload → message, image/video/file/voice bubbles, fullscreen viewer |
 | REA analysis of the 3 reference APKs | ✅ Telegram 13.1.1 · Signal 8.33.2 · Element X 26.10.1 |
 
 ## Run the backend
@@ -91,8 +95,9 @@ against the original screenshots.
 - **Message** — header with QR + compose, search with filter, "New Group / Archive (3)", story
   rail, chat rows with unread badges and read ticks.
 - **Chat** — patterned canvas, date pill, incoming/outgoing bubbles with per-message timestamps
-  and double ticks, PDF attachment card with size + download, inline attachment menu
-  (Camera / Document / Photo & Video / Location / Contact / Polling), composer with + / mic / send.
+  and delivery ticks, **image / video / voice / file bubbles with upload progress**, fullscreen
+  media viewer, inline attachment menu (Camera / Gallery / Document), composer with + / mic / send,
+  live "typing…" in the header.
 - **Status** — grid header, search, "My status" with add badge, people rail with story rings,
   staggered 2-column story grid with play affordance, full-screen viewer.
 - **Call / Profile** — recent calls with direction icons, profile with settings rows.
@@ -111,6 +116,8 @@ against the original screenshots.
 | `docs/analysis/index.html` | visual dashboard of the round-2 findings (open in a browser) |
 | `docs/08-REA-COMMAND-COVERAGE.md` | all 153 REA commands classified: which run on an APK, which ran, which need Ghidra/adb/CDP |
 | `docs/09-HINDI-P1-BUILD.md` | **P1 in Hindi** — kya banaya, message ka poora safar, 4 bug fixes, 6/6 test, kaise chalayein, kya baaki hai |
+| `docs/10-ROADMAP-10-PHASES.md` | **10-phase plan to Telegram scale** — scope, deliverables, verification and risks per phase |
+| `docs/11-HINDI-P2-BUILD.md` | **P2 in Hindi** — media pipeline (upload → blob → thumb → signed URL), 8 bug fixes, 25/25 + 7/7 tests |
 
 ## Research setup (reproducible)
 

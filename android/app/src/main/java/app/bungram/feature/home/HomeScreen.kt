@@ -69,6 +69,7 @@ fun HomeScreen(
     onOpenChat: (String) -> Unit,
     onOpenCall: (String) -> Unit,
     onNewChat: () -> Unit = {},
+    onLogout: () -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(BungramTab.MESSAGE) }
     var showComposeSheet by rememberSaveable { mutableStateOf(false) }
@@ -112,14 +113,18 @@ fun HomeScreen(
                 bottomPadding = contentBottom,
             )
 
-            BungramTab.PROFILE -> ProfileScreen(
-                name = "Fitria Rahmani",
-                phone = "62 812 3456 7890",
-                username = "fitri",
-                about = "Product designer · Jakarta",
-                bottomPadding = contentBottom,
-                onLogout = {},
-            )
+            BungramTab.PROFILE -> {
+                val me = AppGraph.me()
+                ProfileScreen(
+                    name = me?.displayName ?: "Your profile",
+                    phone = me?.phone.orEmpty(),
+                    username = me?.username.orEmpty(),
+                    about = me?.about.orEmpty(),
+                    avatarUrl = me?.avatarUrl,
+                    bottomPadding = contentBottom,
+                    onLogout = onLogout,
+                )
+            }
         }
 
         BungramBottomBar(

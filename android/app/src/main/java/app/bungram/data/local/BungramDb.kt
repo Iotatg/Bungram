@@ -24,6 +24,10 @@ data class OutboxRow(
     val createdAtEpochMs: Long,
     val attempts: Int = 0,
     val lastError: String? = null,
+    /** Set once the bytes are on the server; a retry then only re-sends the message. */
+    val attachmentId: String? = null,
+    /** Local URI kept so a failed upload can be retried after a restart. */
+    val localPath: String? = null,
 )
 
 /**
@@ -112,7 +116,9 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                 body TEXT NOT NULL,
                 created_at INTEGER NOT NULL,
                 attempts INTEGER NOT NULL DEFAULT 0,
-                last_error TEXT
+                last_error TEXT,
+                attachment_id TEXT,
+                local_path TEXT
             )
             """.trimIndent()
         )
@@ -224,6 +230,8 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
             put("created_at", row.createdAtEpochMs)
             put("attempts", row.attempts)
             put("last_error", row.lastError)
+            put("attachment_id", row.attachmentId)
+            put("local_path", row.localPath)
         }, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
@@ -240,6 +248,8 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
                         createdAtEpochMs = c.long("created_at"),
                         attempts = c.getInt(c.getColumnIndexOrThrow("attempts")),
                         lastError = c.optStr("last_error"),
+                        attachmentId = c.optStr("attachment_id"),
+                        localPath = c.optStr("local_path"),
                     )
                 )
             }
@@ -395,6 +405,6 @@ class BungramDb(context: Context) : SQLiteOpenHelper(context.applicationContext,
     companion object {
         const val LOCAL_PREFIX = "l_"
         private const val NAME = "bungram.db"
-        private const val VERSION = 1
+        private const val VERSION = 2
     }
 }

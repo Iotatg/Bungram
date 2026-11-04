@@ -15,8 +15,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import app.bungram.AppGraph
 import app.bungram.SessionState
-import app.bungram.data.model.Attachment
-import app.bungram.data.model.MessageKind
 import app.bungram.feature.auth.AuthViewModel
 import app.bungram.feature.auth.LoginScreen
 import app.bungram.feature.auth.SplashScreen
@@ -88,6 +86,7 @@ private fun MainNavHost() {
                 onOpenChat = { nav.navigate(Routes.chat(it)) },
                 onOpenCall = { /* CallActivity / ConnectionService in phase 3 */ },
                 onNewChat = { nav.navigate(Routes.NEW_CHAT) },
+                onLogout = { AppGraph.logout() },
             )
         }
 
@@ -119,13 +118,18 @@ private fun MainNavHost() {
         ) { entry ->
             val chatId = entry.arguments?.getString("chatId") ?: return@composable
             val vm: ChatViewModel = viewModel(
-                factory = viewModelFactory { initializer { ChatViewModel(AppGraph.repository, chatId) } }
+                factory = viewModelFactory {
+                    initializer { ChatViewModel(AppGraph.repository, AppGraph.recorder, chatId) }
+                }
             )
             val state by vm.state.collectAsStateWithLifecycle()
 
             LaunchedEffect(chatId) { vm.markRead() }
             DisposableEffect(chatId) {
-                onDispose { AppGraph.repository.leaveChat() }
+                onDispose {
+                    AppGraph.repository.leaveChat()
+                    AppGraph.audio.stop()
+                }
             }
 
             ChatScreen(
@@ -134,31 +138,15 @@ private fun MainNavHost() {
                 onDraftChange = vm::onDraftChange,
                 onSend = vm::send,
                 onToggleAttachment = vm::toggleAttachmentMenu,
-                onPickAttachment = { kind ->
-                    vm.sendAttachment(kind, demoAttachmentFor(kind))
-                },
-                onToggleRecording = vm::toggleRecording,
+                onSendMedia = { uri, kind, durationMs -> vm.sendMedia(uri, kind, durationMs) },
+                onStartRecording = { vm.startRecording() },
+                onStopRecording = vm::stopRecording,
+                onCancelRecording = vm::cancelRecording,
                 onVideoCall = {},
                 onVoiceCall = {},
                 onClearReply = { vm.setReply(null) },
+                onDismissError = vm::dismissError,
             )
         }
     }
-}
-
-/** Placeholder attachments so the composer is fully exercisable before the media pipeline lands. */
-private fun demoAttachmentFor(kind: MessageKind): Attachment = when (kind) {
-    MessageKind.IMAGE -> Attachment(
-        mimeType = "image/jpeg", fileName = "IMG_2043.jpg", sizeBytes = 1_240_320, width = 1440, height = 1920,
-    )
-    MessageKind.VIDEO -> Attachment(
-        mimeType = "video/mp4", fileName = "clip.mp4", sizeBytes = 8_420_000, durationMs = 12_400,
-    )
-    MessageKind.FILE -> Attachment(
-        mimeType = "application/pdf", fileName = "Mostate_Brief.pdf", sizeBytes = 250_880,
-    )
-    MessageKind.VOICE -> Attachment(
-        mimeType = "audio/ogg", fileName = "voice.ogg", sizeBytes = 64_000, durationMs = 7_200,
-    )
-    else -> Attachment(mimeType = "text/plain", fileName = "note.txt", sizeBytes = 120)
 }

@@ -124,13 +124,15 @@ class SyncEngine(
                 val id = obj["messageId"]?.jsonPrimitive?.content ?: return
                 repository.onReceipt(id, obj["state"]?.jsonPrimitive?.content ?: "READ")
             }
-            "typing" -> _typing.tryEmit(
-                TypingSignal(
+            "typing" -> {
+                val signal = TypingSignal(
                     chatId = obj["chatId"]?.jsonPrimitive?.content.orEmpty(),
                     userId = obj["userId"]?.jsonPrimitive?.content.orEmpty(),
                     typing = obj["typing"]?.jsonPrimitive?.content == "true",
                 )
-            )
+                repository.onTyping(signal.chatId, signal.userId, signal.typing)
+                _typing.tryEmit(signal)
+            }
             "presence" -> repository.onPresence(
                 obj["userId"]?.jsonPrimitive?.content.orEmpty(),
                 obj["online"]?.jsonPrimitive?.content == "true",

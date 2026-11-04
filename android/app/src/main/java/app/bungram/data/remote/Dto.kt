@@ -76,6 +76,31 @@ data class SyncResponse(
 @Serializable
 data class CreateChatRequest(val peerId: String)
 
+/** Reply of `POST /v1/media`. */
+@Serializable
+data class MediaDto(
+    val id: String,
+    val url: String,
+    val thumbUrl: String? = null,
+    val mimeType: String = "application/octet-stream",
+    val fileName: String? = null,
+    val sizeBytes: Long = 0L,
+    val width: Int = 0,
+    val height: Int = 0,
+    val durationMs: Long = 0L,
+    val sha256: String = "",
+    val colorHint: String? = null,
+    val createdAtEpochMs: Long = 0L,
+)
+
+@Serializable
+data class MediaQuotaDto(
+    val usedBytes: Long = 0L,
+    val limitBytes: Long = 0L,
+    val fileCount: Int = 0,
+    val maxFileBytes: Long = 0L,
+)
+
 @Serializable
 data class StatusResponse(val feeds: List<StoryFeed> = emptyList())
 

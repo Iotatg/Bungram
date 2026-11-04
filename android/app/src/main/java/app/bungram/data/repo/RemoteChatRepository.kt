@@ -13,6 +13,8 @@ import app.bungram.data.model.User
 import app.bungram.data.remote.BungramApi
 import app.bungram.data.remote.SendMessageRequest
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -42,6 +44,7 @@ import java.util.concurrent.ConcurrentHashMap
 class RemoteChatRepository(
     private val db: BungramDb,
     private val api: BungramApi,
+    private val uploader: app.bungram.data.media.MediaUploader,
 ) : ChatRepository {
 
     private val _chats = MutableStateFlow<List<Chat>>(emptyList())
@@ -87,6 +90,7 @@ class RemoteChatRepository(
                 db.upsertUsers(listOf(it))
             }
         }
+        recoverPendingMedia()
     }
 
     fun clear() {
@@ -218,6 +222,9 @@ class RemoteChatRepository(
                             chatId = pending.chatId,
                             kind = pending.kind.name,
                             ciphertext = pending.text,
+                            // Already uploaded before the row was queued, so a retry never
+                            // re-sends megabytes over a flaky connection.
+                            attachmentId = pending.attachmentId,
                             sentAtMs = pending.createdAtEpochMs,
                         )
                     )
@@ -240,6 +247,138 @@ class RemoteChatRepository(
         }
     }
 
+    /* ------------------------------------------------------------------------------- media */
+
+    /**
+     * Send a picture / video / file / voice note.
+     *
+     * The bubble appears immediately with the local URI, then the bytes go up with progress, then
+     * the message is queued. Splitting it this way means a failed upload never leaves a phantom
+     * message on the server, and a failed *send* after a successful upload costs nothing — the
+     * outbox row already carries the media id.
+     */
+    override suspend fun sendMedia(
+        chatId: String,
+        uri: String,
+        kind: MessageKind,
+        durationMs: Long,
+    ) = withContext(Dispatchers.IO) {
+        val clientId = UUID.randomUUID().toString()
+        val localId = BungramDb.LOCAL_PREFIX + clientId
+        val now = System.currentTimeMillis()
+        val optimistic = Message(
+            id = localId,
+            chatId = chatId,
+            senderId = meId,
+            senderName = meName,
+            kind = kind,
+            text = "",
+            attachment = Attachment(
+                localPath = uri,
+                mimeType = mimeFor(kind),
+                durationMs = durationMs,
+                uploadProgress = 0f,
+            ),
+            createdAtEpochMs = now,
+            delivery = DeliveryState.QUEUED,
+            isOutgoing = true,
+        )
+        db.upsertMessages(listOf(optimistic))
+        insertIntoFlow(optimistic)
+        touchChat(optimistic)
+
+        uploadAndSend(clientId, chatId, kind, uri, durationMs, localId, now)
+    }
+
+    private suspend fun uploadAndSend(
+        clientId: String,
+        chatId: String,
+        kind: MessageKind,
+        uri: String,
+        durationMs: Long,
+        localId: String,
+        createdAt: Long = System.currentTimeMillis(),
+    ) {
+        val uploaded = try {
+            uploader.upload(android.net.Uri.parse(uri), kind, durationMs) { progress ->
+                patchFlow(chatId, localId) { msg ->
+                    msg.copy(attachment = msg.attachment?.copy(uploadProgress = progress))
+                }
+            }
+        } catch (t: Throwable) {
+            db.updateDelivery(localId, DeliveryState.FAILED)
+            patchFlow(chatId, localId) {
+                it.copy(delivery = DeliveryState.FAILED, attachment = it.attachment?.copy(uploadProgress = -1f))
+            }
+            return
+        }
+
+        val attachment = Attachment(
+            url = uploaded.url,
+            thumbUrl = uploaded.thumbUrl,
+            mediaId = uploaded.id,
+            localPath = uri,
+            mimeType = uploaded.mimeType,
+            fileName = uploaded.fileName,
+            sizeBytes = uploaded.sizeBytes,
+            width = uploaded.width,
+            height = uploaded.height,
+            durationMs = uploaded.durationMs,
+            colorHint = uploaded.colorHint,
+            sha256 = uploaded.sha256,
+            uploadProgress = -1f,
+        )
+        db.upsertMessages(listOf(Message(
+            id = localId, chatId = chatId, senderId = meId, senderName = meName,
+            kind = kind, text = "", attachment = attachment,
+            createdAtEpochMs = createdAt, delivery = DeliveryState.QUEUED, isOutgoing = true,
+        )))
+        patchFlow(chatId, localId) { it.copy(attachment = attachment) }
+
+        db.enqueue(
+            OutboxRow(
+                clientId = clientId,
+                chatId = chatId,
+                kind = kind,
+                text = "",
+                createdAtEpochMs = createdAt,
+                attachmentId = uploaded.id,
+                localPath = uri,
+            )
+        )
+        flushOutbox()
+    }
+
+    /**
+     * A process kill between "bubble inserted" and "upload finished" leaves a QUEUED message with
+     * a local URI and no outbox row. Re-upload it on next launch instead of losing the user's photo.
+     */
+    private fun recoverPendingMedia() {
+        val queued = db.outbox().map { it.clientId }.toSet()
+        db.allMessages()
+            .filter {
+                it.isOutgoing &&
+                    it.delivery == DeliveryState.QUEUED &&
+                    it.attachment?.localPath != null &&
+                    it.attachment.url == null &&
+                    it.id.removePrefix(BungramDb.LOCAL_PREFIX) !in queued
+            }
+            .forEach { msg ->
+                val att = msg.attachment ?: return@forEach
+                val clientId = msg.id.removePrefix(BungramDb.LOCAL_PREFIX)
+                scope.launch {
+                    uploadAndSend(clientId, msg.chatId, msg.kind, att.localPath!!, att.durationMs, msg.id, msg.createdAtEpochMs)
+                }
+            }
+    }
+
+    private fun mimeFor(kind: MessageKind): String = when (kind) {
+        MessageKind.IMAGE -> "image/*"
+        MessageKind.VIDEO -> "video/*"
+        MessageKind.VOICE -> "audio/mp4"
+        else -> "application/octet-stream"
+    }
+
     /* ----------------------------------------------------------------------------- receipts */
 
     fun onReceipt(messageId: String, state: String) {
@@ -256,6 +395,35 @@ class RemoteChatRepository(
         users[userId]?.let { u ->
             users[userId] = u.copy(presence = if (online) app.bungram.data.model.Presence.ONLINE else app.bungram.data.model.Presence.OFFLINE)
         }
+    }
+
+    /* ------------------------------------------------------------------------------ typing */
+
+    private val typingFlows = ConcurrentHashMap<String, MutableStateFlow<Boolean>>()
+    private val typingExpiry = ConcurrentHashMap<String, Job>()
+
+    override fun typing(chatId: String): StateFlow<Boolean> =
+        typingFlows.getOrPut(chatId) { MutableStateFlow(false) }.asStateFlow()
+
+    /**
+     * A "stopped typing" frame is not guaranteed — the sender may drop off the network mid-word.
+     * Every true therefore arms a timer that clears the flag, so the indicator can never stick.
+     */
+    override fun onTyping(chatId: String, userId: String, typing: Boolean) {
+        if (userId == api.tokens.userId) return
+        val flow = typingFlows.getOrPut(chatId) { MutableStateFlow(false) }
+        typingExpiry.remove(chatId)?.cancel()
+        flow.value = typing
+        if (typing) {
+            typingExpiry[chatId] = scope.launch {
+                delay(TYPING_TTL_MS)
+                flow.value = false
+            }
+        }
+    }
+
+    override suspend fun sendTyping(chatId: String, typing: Boolean) {
+        runCatching { api.typing(chatId, typing) }
     }
 
     /* -------------------------------------------------------------------------------- read */
@@ -313,6 +481,9 @@ class RemoteChatRepository(
     private companion object {
         const val KEY_CURSOR = "sync_cursor"
         const val MAX_ATTEMPTS = 5
+
+        /** Slightly longer than the composer's idle window so the bubble does not flicker. */
+        const val TYPING_TTL_MS = 5_000L
         val MESSAGE_ORDER: Comparator<Message> =
             compareBy<Message> { it.createdAtEpochMs }.thenBy { it.id }
     }

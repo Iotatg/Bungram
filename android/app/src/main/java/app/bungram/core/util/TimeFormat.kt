@@ -46,6 +46,9 @@ object TimeFormat {
         return if (m >= 60) "%d:%02d:%02d".format(m / 60, m % 60, s) else "%d:%02d".format(m, s)
     }
 
+    /** Voice-note / video length from a millisecond value. */
+    fun durationMs(ms: Long): String = duration((ms / 1_000).toInt().coerceAtLeast(0))
+
     fun fileSize(bytes: Long): String = when {
         bytes <= 0 -> ""
         bytes < 1024 -> "$bytes b"
