@@ -6,6 +6,8 @@ import coil.ImageLoaderFactory
 import app.bungram.core.DeviceIdentity
 import app.bungram.core.Sounds
 import app.bungram.crypto.E2ee
+import app.bungram.crypto.MemorySecretStorage
+import app.bungram.crypto.SecretStorage
 import app.bungram.crypto.PrefsSecretStorage
 import app.bungram.data.local.BungramDb
 import app.bungram.data.media.AudioPlayer
@@ -127,7 +129,7 @@ object AppGraph {
             deviceId = DeviceIdentity.of(app)
             // The bundle resolver is a lambda, not an injected dependency: the engine stays a pure
             // crypto object that a JVM test can drive with a fake directory.
-            e2ee = E2ee(PrefsSecretStorage(app), deviceId) { userId ->
+            e2ee = E2ee(secretStorage(app), deviceId) { userId ->
                 runCatching { KeyExchange.toBundle(api.preKeyBundle(userId)) }.getOrNull()
             }
             repository = RemoteChatRepository(db, api, uploader, e2ee)
@@ -159,6 +161,21 @@ object AppGraph {
         sync.start()
         _session.value = SessionState.LoggedIn(tokens.userId.orEmpty())
     }
+
+    /**
+     * Keystore-backed storage, with a degraded fallback.
+     *
+     * `EncryptedSharedPreferences` needs a working Android Keystore. On a few emulator images and
+     * on devices with a broken keystore it throws during creation — and a crash inside
+     * `Application.onCreate` means the app never opens at all. Falling back to memory loses keys on
+     * restart (old messages become undecryptable) but keeps the app usable, which is the better
+     * failure of the two.
+     */
+    private fun secretStorage(context: Application): SecretStorage =
+        runCatching { PrefsSecretStorage(context) }.getOrElse {
+            android.util.Log.w("Bungram", "keystore unavailable — E2EE sessions will not survive restart", it)
+            MemorySecretStorage()
+        }
 
     /** Registers this install so the server can push to it, and so "Devices" can list it. */
     private suspend fun registerDevice() {
